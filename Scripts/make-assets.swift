@@ -1,4 +1,4 @@
-// Renders Resources/AppIcon.icns: `swift Scripts/make-icon.swift`
+// Renders Resources/AppIcon.icns and Resources/dmg-background.png: `swift Scripts/make-assets.swift`
 import AppKit
 
 func rounded(_ r: NSRect, _ radius: CGFloat) -> NSBezierPath { NSBezierPath(roundedRect: r, xRadius: radius, yRadius: radius) }
@@ -37,26 +37,50 @@ func draw() {
     rounded(NSRect(x: 430, y: 782, width: 120, height: 36), 18).fill()
 }
 
-func png(_ px: Int) -> Data {
-    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px, bitsPerSample: 8, samplesPerPixel: 4,
+/// Renders `draw` (authored on a `design`-sized canvas) into a w×h pixel PNG. `dpi` 144 marks it as @2x for Finder.
+func render(w: Int, h: Int, design: CGFloat, dpi: CGFloat = 72, _ draw: () -> Void) -> Data {
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4,
                                hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    rep.size = NSSize(width: CGFloat(w) * 72 / dpi, height: CGFloat(h) * 72 / dpi)
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-    let s = CGFloat(px) / 1024
-    NSAffineTransform.scale(s)
+    let t = NSAffineTransform()
+    t.scale(by: CGFloat(w) * 72 / dpi / design)  // rep.size already maps points to pixels at this dpi
+    t.concat()
     draw()
     NSGraphicsContext.restoreGraphicsState()
     return rep.representation(using: .png, properties: [:])!
 }
 
-extension NSAffineTransform {
-    static func scale(_ s: CGFloat) { let t = NSAffineTransform(); t.scale(by: s); t.concat() }
+func png(_ px: Int) -> Data { render(w: px, h: px, design: 1024, draw) }
+
+/// Installer window background: 660×400 pt, same layout as the Prompter DMG (icons sit at y=190, x=170 and x=490).
+func drawBackground() {
+    NSGradient(starting: hex(0xFAFAFD), ending: hex(0xE5E8EF))!.draw(in: NSRect(x: 0, y: 0, width: 660, height: 400), angle: -90)
+
+    func centered(_ text: String, y: CGFloat, font: NSFont, color: NSColor, kern: CGFloat = 0) {
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .kern: kern]
+        let size = text.size(withAttributes: attrs)
+        text.draw(at: NSPoint(x: (660 - size.width) / 2, y: 400 - y - size.height / 2), withAttributes: attrs)
+    }
+    centered("Install Clipboard Manager", y: 56, font: .systemFont(ofSize: 26, weight: .bold), color: hex(0x080C12), kern: -0.4)
+    centered("Drag Clipboard Manager into your Applications folder", y: 88, font: .systemFont(ofSize: 14), color: hex(0x72767A))
+
+    // arrow, vertically centered on the icons (y = 190 from top)
+    let arrow = NSBezierPath()
+    arrow.lineWidth = 5
+    arrow.lineCapStyle = .round
+    arrow.lineJoinStyle = .round
+    arrow.move(to: NSPoint(x: 256, y: 210)); arrow.line(to: NSPoint(x: 404, y: 210))
+    arrow.move(to: NSPoint(x: 386, y: 228)); arrow.line(to: NSPoint(x: 404, y: 210)); arrow.line(to: NSPoint(x: 386, y: 192))
+    hex(0x4E5057).setStroke()
+    arrow.stroke()
 }
 
 let fm = FileManager.default
 let set = "build/AppIcon.iconset"
 try? fm.removeItem(atPath: set)
-try fm.createDirectory(atPath: set, withIntermediateDirectories: true)
+try fm.createDirectory(atPath: set, withIntermediateDirectories: true)  // also creates build/
 for (name, px) in [("16x16", 16), ("16x16@2x", 32), ("32x32", 32), ("32x32@2x", 64), ("128x128", 128), ("128x128@2x", 256),
                    ("256x256", 256), ("256x256@2x", 512), ("512x512", 512), ("512x512@2x", 1024)] {
     try png(px).write(to: URL(fileURLWithPath: "\(set)/icon_\(name).png"))
@@ -66,5 +90,5 @@ let p = Process()
 p.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
 p.arguments = ["-c", "icns", set, "-o", "Resources/AppIcon.icns"]
 try p.run(); p.waitUntilExit()
-try fm.copyItem(atPath: "\(set)/icon_512x512@2x.png", toPath: "build/AppIcon-preview.png")
-print("wrote Resources/AppIcon.icns")
+try render(w: 1320, h: 800, design: 660, dpi: 144, drawBackground).write(to: URL(fileURLWithPath: "Resources/dmg-background.png"))
+print("wrote Resources/AppIcon.icns, Resources/dmg-background.png")

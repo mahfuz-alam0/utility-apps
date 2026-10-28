@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "$0")"
 pkill -x ClipboardManager || true  # old copy still holds the ⌘⇧V hotkey
 swift build -c release
-[ -f Resources/AppIcon.icns ] || swift Scripts/make-icon.swift  # icon is committed; delete the .icns to regenerate
+[ -f Resources/AppIcon.icns ] && [ -f Resources/dmg-background.png ] || swift Scripts/make-assets.swift  # committed; delete to regenerate
 APP=build/ClipboardManager.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -30,13 +30,6 @@ EOF
 codesign --force --sign - -r='designated => identifier "com.local.ClipboardManager"' "$APP"
 echo "built $APP"
 
-# DMG with an Applications shortcut for drag-install
-rm -rf build/dmg build/ClipboardManager.dmg
-mkdir build/dmg
-cp -R "$APP" build/dmg/
-ln -s /Applications build/dmg/Applications
-hdiutil create -quiet -volname "Clipboard Manager" -srcfolder build/dmg -ov build/ClipboardManager.dmg
-rm -rf build/dmg
-echo "built build/ClipboardManager.dmg"
+Scripts/make-dmg.sh "$APP"
 
 open "$APP"
