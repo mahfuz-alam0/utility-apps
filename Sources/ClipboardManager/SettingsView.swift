@@ -97,7 +97,7 @@ struct SettingsView: View {
             } header: {
                 Text("Save images")
             } footer: {
-                Text("Every recorded image (⌘⇧3 / ⌘⇧4 screenshots, ⌃⌘⇧4 clipboard screenshots, copied images) is also saved here as PNG.")
+                Text("Every recorded image (⌘⇧3 / ⌘⇧4 screenshots, ⌃⌘⇧4 clipboard screenshots, copied images) is also saved here as a PNG named like a macOS screenshot.")
             }
 
             Section("Privacy") {
@@ -132,9 +132,11 @@ final class SettingsWindow {
             w.center()
             NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { [recorder] _ in
                 recorder.stop()
+                NSApp.setActivationPolicy(.accessory)  // back to menu-bar only
             }
             window = w
         }
+        NSApp.setActivationPolicy(.regular)  // Dock icon + ⌘Tab while the window is open
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
     }

@@ -63,8 +63,15 @@ final class ClipboardMonitor {
     private func saveToFolder(_ png: Data) {
         guard !settings.saveFolder.isEmpty else { return }
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss.SSS"  // ms: two copies in one second must not overwrite
-        let url = URL(fileURLWithPath: settings.saveFolder).appendingPathComponent("Clipboard \(f.string(from: Date())).png")
-        do { try png.write(to: url) } catch { NSLog("save image failed: \(error)") }
+        f.dateFormat = "yyyy-MM-dd 'at' h.mm.ss a"  // same style as macOS: "Screenshot 2026-10-28 at 2.56.24 PM.png"
+        let base = "Screenshot \(f.string(from: Date()))"
+        let dir = URL(fileURLWithPath: settings.saveFolder)
+        // never overwrite: the folder may be the one macOS saves ⌘⇧4 into, with the same name for the same second
+        for n in 1...99 {
+            let url = dir.appendingPathComponent(n == 1 ? "\(base).png" : "\(base) (\(n)).png")
+            if FileManager.default.fileExists(atPath: url.path) { continue }
+            do { try png.write(to: url) } catch { NSLog("save image failed: \(error)") }
+            return
+        }
     }
 }

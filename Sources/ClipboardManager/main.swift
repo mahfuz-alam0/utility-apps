@@ -37,6 +37,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate), keyEquivalent: "q")
         statusItem.menu = menu
+
+        buildMainMenu()
+        if !launchedAtLogin { openSettings() }  // opening the app by hand shows a window instead of nothing
+    }
+
+    /// Clicking the app (Dock, Launchpad, Finder) while it is already running.
+    func applicationShouldHandleReopen(_ app: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        openSettings()
+        return true
+    }
+
+    // ponytail: login-item launch detection untested; if it misfires the window just opens at login.
+    private var launchedAtLogin: Bool {
+        NSAppleEventManager.shared().currentAppleEvent?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+    }
+
+    /// The Settings window turns the app into a regular one (Dock, ⌘Tab, menu bar), which needs a main menu for ⌘Q / ⌘W / ⌘C / ⌘V.
+    private func buildMainMenu() {
+        let main = NSMenu()
+        func add(_ title: String, _ items: [(String, Selector, String)]) {
+            let m = NSMenu(title: title)
+            items.forEach { m.addItem(withTitle: $0.0, action: $0.1, keyEquivalent: $0.2) }
+            main.addItem(withTitle: title, action: nil, keyEquivalent: "").submenu = m
+        }
+        add("Clipboard Manager", [("Settings…", #selector(openSettings), ","), ("Quit", #selector(NSApplication.terminate), "q")])
+        add("Edit", [("Cut", #selector(NSText.cut), "x"), ("Copy", #selector(NSText.copy), "c"),
+                     ("Paste", #selector(NSText.paste), "v"), ("Select All", #selector(NSText.selectAll), "a")])
+        add("Window", [("Close", #selector(NSWindow.performClose), "w")])
+        NSApp.mainMenu = main
     }
 
     @objc private func show() { popup.toggle() }
