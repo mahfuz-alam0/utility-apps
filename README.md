@@ -26,7 +26,7 @@ Menu-bar agent (`LSUIElement`, no Dock icon). One target, one file per component
 | [Store.swift](Sources/ClipboardManager/Store.swift) | History (pinned first, then newest; dedupe, size cap), JSON + PNG persistence, thumbnails |
 | [Settings.swift](Sources/ClipboardManager/Settings.swift) | All preferences (UserDefaults-backed): limit, theme, shortcut, privacy, login item |
 | [SettingsView.swift](Sources/ClipboardManager/SettingsView.swift) | Settings window (native grouped `Form`) + shortcut recorder |
-| [HotKey.swift](Sources/ClipboardManager/HotKey.swift) | Global ⌘⇧V via Carbon `RegisterEventHotKey` |
+| [HotKey.swift](Sources/ClipboardManager/HotKey.swift) | Global ⌃⇧V via Carbon `RegisterEventHotKey` |
 | [Caret.swift](Sources/ClipboardManager/Caret.swift) | Accessibility lookup of caret bounds in the frontmost app |
 | [Popup.swift](Sources/ClipboardManager/Popup.swift) | Non-activating `NSPanel`, vibrancy, SwiftUI list, keyboard handling, positioning |
 | [Paste.swift](Sources/ClipboardManager/Paste.swift) | Simulated ⌘V via `CGEvent` |
@@ -79,11 +79,11 @@ Needs the Swift toolchain only (Command Line Tools is enough; Xcode not required
 swift test      # store/settings tests: dedupe, pin, cap, persistence, clamp
 ```
 
-Then copy some text, focus a text field, press ⌘⇧V.
+Then copy some text, focus a text field, press ⌃⇧V.
 
 `bundle.sh` signs with an identifier-only requirement, so the Accessibility grant survives rebuilds. Grant it once; if it ever re-prompts, run `tccutil reset Accessibility com.local.ClipboardManager`, relaunch and grant again. If macOS still re-prompts on every build, sign with a self-signed code-signing certificate (Keychain Access → Certificate Assistant → Create a Certificate → Code Signing) and use `--sign "<cert name>"` in `bundle.sh`.
 
-Change the hotkey in Settings → Shortcut. The default ⌘⇧V is "paste and match style" in Chrome/Slack, which it shadows; pick another combo if that matters.
+Change the hotkey in Settings → Shortcut. Default is ⌃⇧V.
 
 To redraw the icon, edit [Scripts/make-icon.swift](Scripts/make-icon.swift), delete `Resources/AppIcon.icns`, run `./bundle.sh`.
 

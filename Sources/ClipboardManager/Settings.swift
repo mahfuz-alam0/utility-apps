@@ -14,7 +14,7 @@ struct HotKeySpec: Codable, Equatable {
     var code: Int
     var mods: Int  // Carbon modifier mask
     var label: String
-    static let standard = HotKeySpec(code: kVK_ANSI_V, mods: cmdKey | shiftKey, label: "⌘⇧V")
+    static let standard = HotKeySpec(code: kVK_ANSI_V, mods: controlKey | shiftKey, label: "⌃⇧V")
 }
 
 /// User preferences, persisted in UserDefaults. Plain @Published + didSet (no @AppStorage) so it works in any SDK.
