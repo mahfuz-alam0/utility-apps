@@ -25,7 +25,9 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
   <key>LSUIElement</key><true/>
 </dict></plist>
 EOF
-codesign --force --sign - "$APP"
+# Plain ad-hoc signing pins the Accessibility grant to this exact binary's hash, so every rebuild re-prompts.
+# An identifier-only requirement keeps the grant valid across rebuilds.
+codesign --force --sign - -r='=designated => identifier "com.local.ClipboardManager"' "$APP"
 echo "built $APP"
 
 # DMG with an Applications shortcut for drag-install
