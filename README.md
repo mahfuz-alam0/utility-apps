@@ -81,7 +81,7 @@ swift test      # store/settings tests: dedupe, pin, cap, persistence, clamp
 
 Then copy some text, focus a text field, press ⌘⇧V.
 
-Rebuilds change the ad-hoc signature, so macOS may drop the Accessibility grant. If paste stops working: toggle the app off/on in the Accessibility list, or `tccutil reset Accessibility com.local.ClipboardManager` and relaunch. A stable self-signed code-signing certificate avoids this (`codesign --sign "<cert>"` in `bundle.sh`).
+`bundle.sh` signs with an identifier-only requirement, so the Accessibility grant survives rebuilds. Grant it once; if it ever re-prompts, run `tccutil reset Accessibility com.local.ClipboardManager`, relaunch and grant again. If macOS still re-prompts on every build, sign with a self-signed code-signing certificate (Keychain Access → Certificate Assistant → Create a Certificate → Code Signing) and use `--sign "<cert name>"` in `bundle.sh`.
 
 Change the hotkey in Settings → Shortcut. The default ⌘⇧V is "paste and match style" in Chrome/Slack, which it shadows; pick another combo if that matters.
 
