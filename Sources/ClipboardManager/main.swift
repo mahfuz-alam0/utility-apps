@@ -17,6 +17,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         monitor.start()
 
+        // First run: enable launch at login. Later the Settings toggle decides, so turning it off sticks.
+        if UserDefaults.standard.object(forKey: "loginItemInitialized") == nil {
+            UserDefaults.standard.set(true, forKey: "loginItemInitialized")
+            settings.launchAtLogin = true
+        }
+
         // Each sink fires once immediately (initial setup), then on every change.
         settings.$theme.sink { NSApp.appearance = $0.appearance }.store(in: &bag)
         settings.$paused.sink { [pauseItem] in pauseItem.state = $0 ? .on : .off }.store(in: &bag)

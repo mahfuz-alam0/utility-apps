@@ -47,6 +47,7 @@ final class PopupController {
     private let settings: Settings
     private let model = PopupModel()
     private let panel = Panel()
+    private var target: NSRunningApplication?  // app that was frontmost when the popup opened: gets the paste
 
     init(store: ClipStore, settings: Settings) {
         self.store = store
@@ -58,7 +59,8 @@ final class PopupController {
     func hide() { panel.orderOut(nil) }
 
     private func show() {
-        let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        target = NSWorkspace.shared.frontmostApplication
+        let pid = target?.processIdentifier
         let caret = settings.openAtCaret ? pid.flatMap(Caret.rect) : nil
         let anchor = caret ?? NSRect(origin: NSEvent.mouseLocation, size: .zero)
         model.selected = store.items.first?.id
@@ -136,7 +138,8 @@ final class PopupController {
     private func pick(_ item: ClipItem) {
         store.copyToPasteboard(item)
         hide()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { Paste.commandV() }  // let focus return first
+        target?.activate()  // hand key focus back explicitly: the panel took it, ⌘V must land in the target's field
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { Paste.commandV() }  // let focus return first
     }
 }
 
@@ -163,8 +166,9 @@ struct PopupView: View {
             HStack(spacing: 4) {
                 tabButton(.emoji, symbol: "face.smiling", label: "Emoji")
                 tabButton(.clipboard, symbol: "doc.on.clipboard", label: "Clipboard history")
+                Spacer()
             }
-            .frame(height: 36)
+            .padding(.horizontal, 8).frame(height: 36)
 
             if model.tab == .emoji {
                 EmojiPicker(model: model, pick: pickEmoji)

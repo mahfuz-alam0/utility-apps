@@ -65,7 +65,7 @@ Mirrors the Windows 11 clipboard-history flyout.
 
 | Section | Controls |
 |---|---|
-| General | Launch at login · Open popup at text cursor / mouse pointer · Shortcut (click, press combo; Esc cancels; Reset) |
+| General | Launch at login (on by default after first run) · Open popup at text cursor / mouse pointer · Shortcut (click, press combo; Esc cancels; Reset) |
 | Appearance | Theme: System / Light / Dark (applies app-wide) · Show timestamps |
 | History | Maximum items (type or stepper, 1–500) · Keep history after quitting · Record text · Record images · Pause recording · Clear History |
 | Save images | Folder that gets a PNG copy of every recorded image (screenshots included). Off by default. |
