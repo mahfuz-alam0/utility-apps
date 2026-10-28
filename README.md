@@ -29,6 +29,7 @@ Menu-bar agent (`LSUIElement`, no Dock icon). One target, one file per component
 | [HotKey.swift](Sources/ClipboardManager/HotKey.swift) | Global ⌃⇧V via Carbon `RegisterEventHotKey` |
 | [Caret.swift](Sources/ClipboardManager/Caret.swift) | Accessibility lookup of caret bounds in the frontmost app |
 | [Popup.swift](Sources/ClipboardManager/Popup.swift) | Non-activating `NSPanel`, vibrancy, SwiftUI list, keyboard handling, positioning |
+| [Emoji.swift](Sources/ClipboardManager/Emoji.swift) | Emoji list built from `Unicode.Scalar.Properties` |
 | [Paste.swift](Sources/ClipboardManager/Paste.swift) | Simulated ⌘V via `CGEvent` |
 
 Flow: hotkey → remember frontmost app → caret rect (else mouse) → show panel. Panel is key but the app never activates, so the target app stays frontmost. Enter/click → write item to pasteboard (mark `ownChange`) → hide → 80 ms later post ⌘V.
@@ -55,7 +56,8 @@ Mirrors the Windows 11 clipboard-history flyout.
 - Hovered/selected card shows Pin and ✕ buttons; pinned cards show a pin glyph.
 - Animations: open = fade + scale 0.96→1 from top, 120 ms ease-out; selection scroll 100 ms.
 - States: **empty** (icon + "Nothing copied yet"), **paused** (orange banner with Resume), **selected**. No loading state: history loads synchronously from a small JSON file.
-- Keys: ↑/↓ move, Enter paste, Esc close, Delete/⌦ remove, P pin/unpin. Click card = paste. Click outside = close. Hotkey again = close.
+- Keys: ↑/↓ move, Enter paste, Esc close, Delete/⌦ remove, P pin/unpin. Click card = paste. ⇥ switches Clipboard/Emoji tab.
+- Emoji tab: grid of system emoji (generated from Unicode tables, no skin tones/flags/ZWJ), type to search by name, arrows move, Enter/click pastes. Not added to history. Click outside = close. Hotkey again = close.
 - Position: below the caret if the app exposes it, else below the mouse (or always mouse, per Settings); flips above if it doesn't fit; clamped to the screen's visible frame.
 - Menu-bar icon is a template image, so it tints for light/dark menu bars.
 
@@ -104,4 +106,4 @@ If `swift test` fails once with `plugin for module 'TestingMacros' not found`, r
 
 ## Extend
 
-Search field, per-app ignore list (check `NSWorkspace.frontmostApplication.bundleIdentifier` in `ClipboardMonitor.poll`), launch at login (`SMAppService.mainApp.register()`), user-configurable hotkey/size, emoji/symbol tabs.
+Search field, per-app ignore list (check `NSWorkspace.frontmostApplication.bundleIdentifier` in `ClipboardMonitor.poll`), launch at login (`SMAppService.mainApp.register()`), user-configurable hotkey/size, emoji categories/skin tones/recents, symbol tabs.

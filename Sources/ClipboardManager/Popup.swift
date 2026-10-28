@@ -4,9 +4,22 @@ import Carbon.HIToolbox
 
 /// UI state lives here, not in @State: the Command Line Tools SDK can't expand SwiftUI's @State macro.
 final class PopupModel: ObservableObject {
+    enum Tab { case clipboard, emoji }
+
+    static let emojiColumns = 8
+
     @Published var selected: UUID?  // by id, so new copies / pinning don't move the selection
     @Published var shown = false
     @Published var hovered: UUID?
+    @Published var tab = Tab.clipboard
+    @Published var query = ""  // typed keys: the panel swallows key events, so there is no real text field
+    @Published var emoji = 0  // index into emojis
+    @Published var hoveredEmoji: Int?
+
+    var emojis: [Emoji.Entry] {
+        let q = query.lowercased()
+        return q.isEmpty ? Emoji.all : Emoji.all.filter { $0.name.contains(q) }
+    }
 }
 
 /// Key but never active: the previously focused app stays frontmost, so ⌘V lands there.
@@ -50,6 +63,9 @@ final class PopupController {
         let anchor = caret ?? NSRect(origin: NSEvent.mouseLocation, size: .zero)
         model.selected = store.items.first?.id
         model.shown = false
+        model.tab = .clipboard
+        model.query = ""
+        model.emoji = 0
 
         let fx = NSVisualEffectView(frame: panel.contentLayoutRect)
         fx.material = .popover  // follows light/dark
@@ -57,7 +73,8 @@ final class PopupController {
         fx.wantsLayer = true
         fx.layer?.cornerRadius = 8
         fx.layer?.masksToBounds = true
-        let host = NSHostingView(rootView: PopupView(store: store, model: model, settings: settings, pick: pick))
+        let host = NSHostingView(rootView: PopupView(store: store, model: model, settings: settings, pick: pick,
+                                                       pickEmoji: { [self] in pick(ClipItem(text: $0)) }))  // own write: not recorded
         host.frame = fx.bounds
         host.autoresizingMask = [.width, .height]
         fx.addSubview(host)
@@ -77,7 +94,28 @@ final class PopupController {
         return NSPoint(x: min(max(o.x, v.minX), v.maxX - size.width), y: min(max(o.y, v.minY), v.maxY - size.height))
     }
 
+    private func emojiKey(_ e: NSEvent) {
+        let list = model.emojis
+        func move(_ d: Int) { if !list.isEmpty { model.emoji = max(0, min(model.emoji + d, list.count - 1)) } }
+        switch Int(e.keyCode) {
+        case kVK_RightArrow: move(1)
+        case kVK_LeftArrow: move(-1)
+        case kVK_DownArrow: move(PopupModel.emojiColumns)
+        case kVK_UpArrow: move(-PopupModel.emojiColumns)
+        case kVK_Return, kVK_ANSI_KeypadEnter: if list.indices.contains(model.emoji) { pick(ClipItem(text: list[model.emoji].char)) }
+        case kVK_Escape: hide()
+        case kVK_Delete: if !model.query.isEmpty { model.query.removeLast(); model.emoji = 0 }
+        default:
+            if let c = e.characters, !c.isEmpty, c.allSatisfy({ $0.isLetter || $0.isNumber || $0 == " " }) {
+                model.query += c
+                model.emoji = 0
+            }
+        }
+    }
+
     private func key(_ e: NSEvent) {
+        if Int(e.keyCode) == kVK_Tab { model.tab = model.tab == .emoji ? .clipboard : .emoji; return }
+        if model.tab == .emoji { return emojiKey(e) }
         let items = store.items
         let i = items.firstIndex { $0.id == model.selected } ?? 0
         func select(_ j: Int) {
@@ -118,27 +156,49 @@ struct PopupView: View {
     @ObservedObject var model: PopupModel
     @ObservedObject var settings: Settings
     let pick: (ClipItem) -> Void
+    let pickEmoji: (String) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("Clipboard history").font(.system(size: 14, weight: .semibold))
-                Spacer()
-                if store.items.contains(where: { !$0.pinned }) {
-                    Button("Clear all", action: store.clear).buttonStyle(.plain)
-                        .font(.system(size: 12)).foregroundStyle(Color.accentColor)
-                }
+            HStack(spacing: 4) {
+                tabButton(.emoji, symbol: "face.smiling", label: "Emoji")
+                tabButton(.clipboard, symbol: "doc.on.clipboard", label: "Clipboard history")
             }
-            .padding(.horizontal, 16).frame(height: 48)
+            .frame(height: 36)
 
-            if settings.paused { pausedBanner }
-            if store.items.isEmpty { empty } else { list }
+            if model.tab == .emoji {
+                EmojiPicker(model: model, pick: pickEmoji)
+            } else {
+                HStack {
+                    Text("Clipboard history").font(.system(size: 14, weight: .semibold))
+                    Spacer()
+                    if store.items.contains(where: { !$0.pinned }) {
+                        Button("Clear all", action: store.clear).buttonStyle(.plain)
+                            .font(.system(size: 12)).foregroundStyle(Color.accentColor)
+                    }
+                }
+                .padding(.horizontal, 16).frame(height: 40)
+
+                if settings.paused { pausedBanner }
+                if store.items.isEmpty { empty } else { list }
+            }
         }
         .frame(width: 360, height: 480)
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.cardStroke, lineWidth: 1))
         .scaleEffect(model.shown ? 1 : 0.96, anchor: .top)
         .opacity(model.shown ? 1 : 0)
         .onAppear { withAnimation(.easeOut(duration: 0.12)) { model.shown = true } }
+    }
+
+    private func tabButton(_ tab: PopupModel.Tab, symbol: String, label: String) -> some View {
+        let on = model.tab == tab
+        return Button { model.tab = tab } label: {
+            Image(systemName: symbol).font(.system(size: 14))
+                .foregroundStyle(on ? Color.accentColor : Color.secondary)
+                .frame(width: 44, height: 32).contentShape(Rectangle())
+                .overlay(alignment: .bottom) { if on { Capsule().fill(Color.accentColor).frame(width: 16, height: 2) } }
+        }
+        .buttonStyle(.plain).accessibilityLabel(label)
     }
 
     private var pausedBanner: some View {
@@ -222,6 +282,57 @@ struct Row: View {
         .contentShape(Rectangle())
         .onHover { if $0 { model.hovered = item.id } else if model.hovered == item.id { model.hovered = nil } }
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+struct EmojiPicker: View {
+    @ObservedObject var model: PopupModel
+    let pick: (String) -> Void
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: PopupModel.emojiColumns)
+
+    var body: some View {
+        let list = model.emojis
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Text(model.query.isEmpty ? "Type to search" : model.query)
+                    .foregroundStyle(model.query.isEmpty ? Color.secondary : Color.primary)
+                Spacer()
+            }
+            .font(.system(size: 13))
+            .padding(.horizontal, 12).frame(height: 32)
+            .background(RoundedRectangle(cornerRadius: 4).fill(Color.card))
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.cardStroke))
+            .padding(.horizontal, 8).padding(.bottom, 6)
+
+            if list.isEmpty {
+                Text("No emoji found").font(.system(size: 12)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 0) {
+                            ForEach(list.indices, id: \.self) { i in
+                                Text(list[i].char).font(.system(size: 24))
+                                    .frame(maxWidth: .infinity).frame(height: 40)
+                                    .background(RoundedRectangle(cornerRadius: 4)
+                                        .fill(i == model.emoji || i == model.hoveredEmoji ? Color.cardHover : Color.clear))
+                                    .overlay(RoundedRectangle(cornerRadius: 4)
+                                        .strokeBorder(Color.accentColor, lineWidth: i == model.emoji ? 2 : 0))
+                                    .contentShape(Rectangle())
+                                    .id(i)
+                                    .onTapGesture { pick(list[i].char) }
+                                    .onHover { if $0 { model.hoveredEmoji = i } else if model.hoveredEmoji == i { model.hoveredEmoji = nil } }
+                                    .accessibilityLabel(list[i].name)
+                            }
+                        }
+                        .padding(.horizontal, 8).padding(.bottom, 8)
+                    }
+                    .onChange(of: model.emoji) { _, i in proxy.scrollTo(i) }
+                }
+            }
+        }
     }
 }
 
