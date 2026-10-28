@@ -66,6 +66,7 @@ Mirrors the Windows 11 clipboard-history flyout.
 | General | Launch at login · Open popup at text cursor / mouse pointer · Shortcut (click, press combo; Esc cancels; Reset) |
 | Appearance | Theme: System / Light / Dark (applies app-wide) · Show timestamps |
 | History | Maximum items (type or stepper, 1–500) · Keep history after quitting · Record text · Record images · Pause recording · Clear History |
+| Save images | Folder that gets a PNG copy of every recorded image (screenshots included). Off by default. |
 | Privacy | Ignore password-manager content (`org.nspasteboard.ConcealedType` etc.) |
 
 Pinned items don't count toward the limit and survive Clear. Turning "Keep history after quitting" off deletes the saved history file; session images are removed at next launch.

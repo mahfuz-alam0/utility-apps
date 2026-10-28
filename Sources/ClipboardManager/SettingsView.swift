@@ -85,12 +85,36 @@ struct SettingsView: View {
                 Text("Pinned items don't count toward the limit and survive Clear.")
             }
 
+            Section {
+                LabeledContent("Folder") {
+                    HStack {
+                        Text(settings.saveFolder.isEmpty ? "Off" : (settings.saveFolder as NSString).abbreviatingWithTildeInPath)
+                            .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        Button("Choose…") { chooseFolder() }
+                        Button("Off") { settings.saveFolder = "" }.disabled(settings.saveFolder.isEmpty)
+                    }
+                }
+            } header: {
+                Text("Save images")
+            } footer: {
+                Text("Every recorded image (⌘⇧3 / ⌘⇧4 screenshots, ⌃⌘⇧4 clipboard screenshots, copied images) is also saved here as PNG.")
+            }
+
             Section("Privacy") {
                 Toggle("Ignore password-manager content", isOn: $settings.ignoreSecrets)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 620)
+        .frame(width: 480, height: 720)
+    }
+
+    private func chooseFolder() {
+        let p = NSOpenPanel()
+        p.canChooseFiles = false
+        p.canChooseDirectories = true
+        p.canCreateDirectories = true
+        p.prompt = "Choose"
+        if p.runModal() == .OK, let url = p.url { settings.saveFolder = url.path }
     }
 }
 

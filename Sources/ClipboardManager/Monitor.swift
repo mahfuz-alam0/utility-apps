@@ -52,11 +52,19 @@ final class ClipboardMonitor {
 
         if settings.recordText, let s = pb.string(forType: .string), !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             store.add(text: s)
-        } else if settings.recordImages, let png = pb.data(forType: .png) {
+        } else if settings.recordImages,
+                  let png = pb.data(forType: .png) ?? pb.data(forType: .tiff).flatMap({ NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:]) }) {
             store.add(png: png)
-        } else if settings.recordImages, let tiff = pb.data(forType: .tiff),
-                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
-            store.add(png: png)
+            saveToFolder(png)
         }
+    }
+
+    /// ponytail: saves every recorded image, no dedupe and no screenshot-only filter.
+    private func saveToFolder(_ png: Data) {
+        guard !settings.saveFolder.isEmpty else { return }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss.SSS"  // ms: two copies in one second must not overwrite
+        let url = URL(fileURLWithPath: settings.saveFolder).appendingPathComponent("Clipboard \(f.string(from: Date())).png")
+        do { try png.write(to: url) } catch { NSLog("save image failed: \(error)") }
     }
 }

@@ -33,6 +33,8 @@ final class Settings: ObservableObject {
     @Published var recordText: Bool { didSet { d.set(recordText, forKey: "recordText") } }
     @Published var recordImages: Bool { didSet { d.set(recordImages, forKey: "recordImages") } }
     @Published var ignoreSecrets: Bool { didSet { d.set(ignoreSecrets, forKey: "ignoreSecrets") } }
+    /// Folder that gets a PNG copy of every recorded image; "" = off
+    @Published var saveFolder: String { didSet { d.set(saveFolder, forKey: "saveFolder") } }
     @Published var paused: Bool { didSet { d.set(paused, forKey: "paused") } }
     @Published var showTimestamps: Bool { didSet { d.set(showTimestamps, forKey: "showTimestamps") } }
     @Published var openAtCaret: Bool { didSet { d.set(openAtCaret, forKey: "openAtCaret") } }
@@ -62,6 +64,7 @@ final class Settings: ObservableObject {
         recordText = defaults.bool(forKey: "recordText")
         recordImages = defaults.bool(forKey: "recordImages")
         ignoreSecrets = defaults.bool(forKey: "ignoreSecrets")
+        saveFolder = defaults.string(forKey: "saveFolder") ?? ""
         paused = defaults.bool(forKey: "paused")
         showTimestamps = defaults.bool(forKey: "showTimestamps")
         openAtCaret = defaults.bool(forKey: "openAtCaret")
