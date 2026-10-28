@@ -78,9 +78,9 @@ func drawBackground() {
 }
 
 let fm = FileManager.default
-let set = "build/AppIcon.iconset"
+let set = ".build/AppIcon.iconset"
 try? fm.removeItem(atPath: set)
-try fm.createDirectory(atPath: set, withIntermediateDirectories: true)  // also creates build/
+try fm.createDirectory(atPath: set, withIntermediateDirectories: true)  // also creates .build/
 for (name, px) in [("16x16", 16), ("16x16@2x", 32), ("32x32", 32), ("32x32@2x", 64), ("128x128", 128), ("128x128@2x", 256),
                    ("256x256", 256), ("256x256@2x", 512), ("512x512", 512), ("512x512@2x", 1024)] {
     try png(px).write(to: URL(fileURLWithPath: "\(set)/icon_\(name).png"))

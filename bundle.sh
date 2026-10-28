@@ -1,11 +1,11 @@
 #!/bin/sh
-# Stops the running copy, builds build/ClipboardManager.app (menu-bar agent, no Dock icon), launches it.
+# Stops the running copy, builds .build/ClipboardManager.app + build/ClipboardManager.dmg (menu-bar agent, no Dock icon), launches it.
 set -e
 cd "$(dirname "$0")"
 pkill -x ClipboardManager || true  # old copy still holds the ⌘⇧V hotkey
 swift build -c release
 [ -f Resources/AppIcon.icns ] && [ -f Resources/dmg-background.png ] || swift Scripts/make-assets.swift  # committed; delete to regenerate
-APP=build/ClipboardManager.app
+APP=.build/ClipboardManager.app  # not in build/, so build/ holds only the .dmg
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/ClipboardManager "$APP/Contents/MacOS/"

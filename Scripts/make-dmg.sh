@@ -1,5 +1,5 @@
 #!/bin/sh
-# Usage: Scripts/make-dmg.sh build/ClipboardManager.app
+# Usage: Scripts/make-dmg.sh .build/ClipboardManager.app
 # Builds build/ClipboardManager.dmg: drag-to-Applications installer window (660x400, background art, volume icon).
 # Window layout is set through Finder (AppleScript); macOS may ask once to let your terminal/editor control Finder.
 set -e
