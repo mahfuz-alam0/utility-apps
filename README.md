@@ -78,7 +78,7 @@ Pinned items don't count toward the limit and survive Clear. Turning "Keep histo
 Needs the Swift toolchain only (Command Line Tools is enough; Xcode not required).
 
 ```sh
-./bundle.sh     # stops old copy, builds .build/ClipboardManager.app + build/ClipboardManager.dmg, launches it; grant Accessibility when prompted
+./bundle.sh     # builds .build/ClipboardManager.app + build/ClipboardManager.dmg; does not launch or install (open the .app or drag it from the dmg yourself, grant Accessibility when prompted)
 swift test      # store/settings tests: dedupe, pin, cap, persistence, clamp
 ```
 

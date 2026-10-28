@@ -156,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 // one copy only: a second launch just brings the first one forward
 if let id = Bundle.main.bundleIdentifier,
    let other = NSRunningApplication.runningApplications(withBundleIdentifier: id).first(where: { $0.processIdentifier != getpid() }) {
-    other.activate(options: [.activateIgnoringOtherApps])
+    other.activate()
     exit(0)
 }
 
