@@ -12,8 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var bag = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ n: Notification) {
-        // Accessibility: simulated ⌘V + caret lookup. Shows the system prompt once.
-        _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        // Accessibility: simulated ⌘V + caret lookup. Prompts, and clears a stale grant left by an older build.
+        Paste.ensureAccess()
 
         monitor.start()
 
