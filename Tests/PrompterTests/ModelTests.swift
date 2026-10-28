@@ -20,6 +20,13 @@ import Testing
     #expect(buildContent(t[1], size: 26).string.hasPrefix("A\n"))
 }
 
+@Test func pasteSplitsParagraphs() {
+    let p = pasteSteps("Hi, I'm Mahfuz.\nThis is my walkthrough.\n \nSo the app is for dealerships.\n\n\nThe hard part is the backend.")
+    #expect(p.map(\.say) == ["Hi, I'm Mahfuz.\nThis is my walkthrough.", "So the app is for dealerships.", "The hard part is the backend."])
+    #expect(pasteSteps("# A\nx\n\ny\n# B\nz").map(\.title) == ["A", "B"])  // headings win over paragraphs
+    #expect(pasteSteps("just one paragraph").count == 1)
+}
+
 @Test func accelerators() {
     let a = parseAccel("CommandOrControl+Alt+P")
     #expect(a?.code == 35 && a?.mods == UInt32(cmdKey | optionKey))

@@ -129,6 +129,19 @@ func importSteps(_ text: String) -> [Step] {
     return steps.filter { !$0.title.isEmpty || !$0.say.isEmpty || !$0.cue.isEmpty }
 }
 
+/// Pasted or imported text → steps: "# Title" sections if it has headings, else one step per paragraph (blank-line separated).
+func pasteSteps(_ text: String) -> [Step] {
+    if text.range(of: #"(?m)^#{1,3}\s"#, options: .regularExpression) != nil { return importSteps(text) }
+    var steps: [Step] = []
+    var para: [String] = []
+    for s in lines(text) + [""] {
+        if !s.isEmpty { para.append(s); continue }
+        if !para.isEmpty { steps.append(Step(say: para.joined(separator: "\n"))) }
+        para = []
+    }
+    return steps
+}
+
 func exportText(_ steps: [Step]) -> String {
     steps.enumerated().map { i, s in
         var out = "# \(s.title.isEmpty ? "Step \(i + 1)" : s.title)\n"
@@ -234,10 +247,10 @@ final class Store: ObservableObject {
     func importScript() {
         let p = NSOpenPanel()
         p.allowedContentTypes = [.plainText]
-        p.message = "Choose a text file. Lines starting with # become steps."
+        p.message = "Choose a text file. Lines starting with # become steps; without them, each paragraph does."
         guard p.runModal() == .OK, let url = p.url else { return }
         do {
-            let steps = importSteps(try String(contentsOf: url, encoding: .utf8))
+            let steps = pasteSteps(try String(contentsOf: url, encoding: .utf8))
             let s = Script(name: url.deletingPathExtension().lastPathComponent, steps: steps.isEmpty ? [Step()] : steps)
             scripts.append(s)
             selection = s.id

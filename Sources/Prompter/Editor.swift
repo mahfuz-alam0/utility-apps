@@ -134,6 +134,7 @@ struct ScriptView: View {
                              startHere: { start(number(of: step) - 1) },
                              duplicate: { duplicate(step) },
                              remove: { script.steps.removeAll { $0.id == step.id } })
+                        .onChange(of: step.say) { old, new in splitPaste(step.id, old, new) }
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 6, leading: 24, bottom: 6, trailing: 24))
                 }
@@ -157,6 +158,16 @@ struct ScriptView: View {
             proxy.scrollTo(s.id)
             focus = s.id
         }
+    }
+
+    /// Pasting a whole script into an empty step turns it into one step per paragraph (or per "# heading").
+    private func splitPaste(_ id: UUID, _ old: String, _ new: String) {
+        guard old.isEmpty, let i = script.steps.firstIndex(where: { $0.id == id }) else { return }
+        var parts = pasteSteps(new)
+        guard parts.count > 1 else { return }
+        parts[0].id = id
+        if parts[0].title.isEmpty { parts[0].title = script.steps[i].title }
+        script.steps.replaceSubrange(i...i, with: parts)
     }
 
     private func duplicate(_ step: Step) {
@@ -284,7 +295,7 @@ struct SayEditor: View {
             Text(verbatim: text + "\n").padding(.horizontal, 5).padding(.vertical, 8).opacity(0)
             TextEditor(text: $text).scrollContentBackground(.hidden)
             if text.isEmpty {
-                Text(verbatim: "Type or paste what you'll say.\nBlank line = new paragraph  ·  “- ” = bullet  ·  **bold** = highlight")
+                Text(verbatim: "Type or paste what you'll say. Pasting a whole script splits it into steps.\nBlank line = new paragraph  ·  “- ” = bullet  ·  **bold** = highlight")
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 8)
