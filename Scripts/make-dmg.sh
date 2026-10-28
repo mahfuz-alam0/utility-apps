@@ -22,8 +22,6 @@ cp Resources/dmg-background.png "$STAGE/.background/bg.png"
 hdiutil create -quiet -volname "$NAME" -srcfolder "$STAGE" -fs HFS+ -format UDRW -ov "$RW"
 rm -rf "$STAGE"
 hdiutil attach -quiet -readwrite -noverify -noautoopen "$RW"
-cp Resources/AppIcon.icns "$MNT/.VolumeIcon.icns"  # hdiutil create drops it from -srcfolder, so copy after mount
-SetFile -a C "$MNT"  # use it as the volume icon
 
 # bounds are {left, top, right, bottom}: 660 wide, 400 content + 22 title bar. Icon positions match the Prompter DMG.
 osascript <<EOF || echo "warning: could not style the DMG window; allow your terminal/editor to control Finder and rebuild" >&2
@@ -51,6 +49,10 @@ tell application "Finder"
 end tell
 EOF
 
+# volume icon goes in last: hdiutil -srcfolder drops it, and Finder deletes it / resets the flag while styling
+sleep 2
+cp Resources/AppIcon.icns "$MNT/.VolumeIcon.icns"
+SetFile -a C "$MNT"
 sync
 sleep 1
 hdiutil detach -quiet "$MNT" || { sleep 2; hdiutil detach -quiet -force "$MNT"; }

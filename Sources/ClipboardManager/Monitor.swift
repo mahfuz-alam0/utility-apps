@@ -13,6 +13,7 @@ final class ClipboardMonitor {
     private let settings: Settings
     private var last: Int
     private var timer: Timer?
+    private let shots = NSMetadataQuery()
 
     init(store: ClipStore, settings: Settings) {
         self.store = store
@@ -22,6 +23,25 @@ final class ClipboardMonitor {
 
     func start() {
         timer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in self?.poll() }
+        watchScreenshots()
+    }
+
+    /// ⌘⇧3/⌘⇧4 only save a file, the pasteboard is never touched. Spotlight flags those files, so copy each new one
+    /// to the pasteboard and let poll() record it. ponytail: needs Spotlight indexing on, no folder-watch fallback.
+    private func watchScreenshots() {
+        shots.predicate = NSPredicate(format: "%K == 1", "kMDItemIsScreenCapture")
+        NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidUpdate, object: shots, queue: .main) { [weak self] n in
+            guard let self, !settings.paused, settings.recordImages else { return }
+            for case let item as NSMetadataItem in n.userInfo?[NSMetadataQueryUpdateAddedItemsKey] as? [Any] ?? [] {
+                // fresh files only: a reindex must not replay old screenshots
+                guard let path = item.value(forAttribute: NSMetadataItemPathKey) as? String,
+                      let made = item.value(forAttribute: NSMetadataItemFSCreationDateKey) as? Date, -made.timeIntervalSinceNow < 60,
+                      let img = NSImage(contentsOfFile: path) else { continue }
+                pb.clearContents()
+                pb.writeObjects([img])
+            }
+        }
+        shots.start()
     }
 
     private func poll() {
