@@ -32,3 +32,13 @@ import Testing
     #expect(a?.code == 35 && a?.mods == UInt32(cmdKey | optionKey))
     #expect(pretty("CommandOrControl+Shift+N") == "⌘⇧N")
 }
+
+@Test func scriptTextAndLegacyMigration() throws {
+    #expect(Script(text: "one\n\ntwo").steps.map(\.say) == ["one", "two"])
+    #expect(importSteps("# A\nx\n> Time: 20").first?.seconds == 20)
+    let old = #"{"id":"\#(UUID())","name":"N","steps":[{"id":"\#(UUID())","title":"A","say":"x","cue":"c","seconds":9}]}"#
+    let s = try JSONDecoder().decode(Script.self, from: Data(old.utf8))
+    #expect(s.steps.map(\.title) == ["A"] && s.steps.first?.say == "x" && s.steps.first?.cue == "c" && s.steps.first?.seconds == 9)
+    let again = try JSONDecoder().decode(Script.self, from: JSONEncoder().encode(s))
+    #expect(again == s)
+}
