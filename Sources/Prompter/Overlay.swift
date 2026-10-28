@@ -207,6 +207,8 @@ final class OverlayView: NSView {
     private let body = BodyView()
     private let grip = GripView()
     private let bar = NSView()
+    private let blur = NSVisualEffectView()  // blurs the screen behind the overlay so text underneath doesn't fight the prompt
+    private let tint = NSView()              // dark layer on top of the blur, strength = Bg slider
     private let protectBtn = PillButton("", "protect")
     private let playBtn = PillButton("Play", "play", .strong)
     private let modeBtn = PillButton("", "mode")
@@ -227,6 +229,19 @@ final class OverlayView: NSView {
         layer?.borderWidth = 1
         layer?.masksToBounds = true
         body.clipsToBounds = true
+        blur.material = .hudWindow
+        blur.blendingMode = .behindWindow
+        blur.state = .active
+        blur.appearance = NSAppearance(named: .darkAqua)
+        blur.wantsLayer = true
+        blur.layer?.cornerRadius = 16
+        blur.layer?.masksToBounds = true
+        tint.wantsLayer = true
+        for v in [blur, tint] {
+            v.frame = bounds
+            v.autoresizingMask = [.width, .height]
+            addSubview(v)
+        }
         bar.wantsLayer = true
         bar.layer?.backgroundColor = accent.cgColor
         buttons = [
@@ -261,7 +276,8 @@ final class OverlayView: NSView {
 
     func render(_ s: Snapshot) {
         snap = s
-        layer?.backgroundColor = NSColor(srgbRed: 8 / 255, green: 12 / 255, blue: 18 / 255, alpha: s.bgAlpha).cgColor
+        tint.layer?.backgroundColor = NSColor(srgbRed: 8 / 255, green: 12 / 255, blue: 18 / 255, alpha: s.bgAlpha).cgColor
+        blur.isHidden = s.bgAlpha == 0  // Bg at 0 = fully clear glass, no blur
         layer?.borderColor = (s.locked ? NSColor.white.withAlphaComponent(0.1) : accent.withAlphaComponent(0.75)).cgColor
         dots.n = s.steps.count <= 12 ? s.steps.count : 0
         dots.index = s.index

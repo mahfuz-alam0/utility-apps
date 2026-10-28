@@ -6,11 +6,11 @@ let brand = Color(red: 1, green: 207.0 / 255, blue: 92.0 / 255)
 /// Tiny observable boolean for popover state (`@State` needs the SwiftUIMacros plugin, which Command Line Tools lack).
 final class Flag: ObservableObject { @Published var on = false }
 
-func confirm(_ title: String, _ detail: String) -> Bool {
+func confirm(_ title: String, _ detail: String, ok: String = "Delete") -> Bool {
     let a = NSAlert()
     a.messageText = title
     a.informativeText = detail
-    a.addButton(withTitle: "Delete")
+    a.addButton(withTitle: ok)
     a.addButton(withTitle: "Cancel")
     return a.runModal() == .alertFirstButtonReturn
 }
@@ -82,21 +82,20 @@ struct EditorView: View {
     }
 }
 
-// MARK: - One script: header, step cards, run bar
+// MARK: - One script: header, text area, run bar
 
 struct ScriptView: View {
     @Binding var script: Script
     @ObservedObject var store: Store
     let start: (Int) -> Void
     let delete: () -> Void
-    @FocusState private var focus: UUID?
     @StateObject private var display = Flag()
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            stepList
+            textArea
             Divider()
             runBar
         }
@@ -111,6 +110,9 @@ struct ScriptView: View {
                 Text(script.summary(wpm: store.settings.wpm)).font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
+            Button { clear() } label: { Label("Clear", systemImage: "trash") }
+                .disabled(script.text.isEmpty)
+                .help("Remove all the text in this script")
             Menu {
                 Button("Duplicate") { store.duplicate(script.id) }
                 Button("Import text file…") { store.importScript() }
@@ -126,55 +128,28 @@ struct ScriptView: View {
         .padding(.vertical, 16)
     }
 
-    private var stepList: some View {
-        ScrollViewReader { proxy in
-            List {
-                ForEach($script.steps) { $step in
-                    StepCard(step: $step, number: number(of: step), wpm: store.settings.wpm, focus: $focus,
-                             startHere: { start(number(of: step) - 1) },
-                             duplicate: { duplicate(step) },
-                             remove: { script.steps.removeAll { $0.id == step.id } })
-                        .onChange(of: step.say) { old, new in splitPaste(step.id, old, new) }
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 24, bottom: 6, trailing: 24))
-                }
-                .onMove { script.steps.move(fromOffsets: $0, toOffset: $1) }
-                Button { add(proxy) } label: { Label("Add step", systemImage: "plus.circle.fill").font(.headline) }
-                    .buttonStyle(.borderless)
+    private var textArea: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $script.text).scrollContentBackground(.hidden)
+            if script.text.isEmpty {
+                Text(verbatim: "Type or paste your script. Each paragraph (blank line between) becomes a step when you press Start.\n\nOr name steps with “# Title” lines.  “- ” = bullet  ·  **bold** = highlight\n“> Show: text” = on-screen cue  ·  “> Time: 20” = fixed seconds (Auto mode)")
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 5)
                     .padding(.vertical, 8)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 24, bottom: 14, trailing: 24))
+                    .allowsHitTesting(false)
             }
-            .listStyle(.plain)
         }
+        .font(.system(size: 15))
+        .padding(8)
+        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.12)))
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func number(of step: Step) -> Int { (script.steps.firstIndex { $0.id == step.id } ?? 0) + 1 }
-
-    private func add(_ proxy: ScrollViewProxy) {
-        let s = Step()
-        script.steps.append(s)
-        DispatchQueue.main.async {
-            proxy.scrollTo(s.id)
-            focus = s.id
-        }
-    }
-
-    /// Pasting a whole script into an empty step turns it into one step per paragraph (or per "# heading").
-    private func splitPaste(_ id: UUID, _ old: String, _ new: String) {
-        guard old.isEmpty, let i = script.steps.firstIndex(where: { $0.id == id }) else { return }
-        var parts = pasteSteps(new)
-        guard parts.count > 1 else { return }
-        parts[0].id = id
-        if parts[0].title.isEmpty { parts[0].title = script.steps[i].title }
-        script.steps.replaceSubrange(i...i, with: parts)
-    }
-
-    private func duplicate(_ step: Step) {
-        guard let i = script.steps.firstIndex(where: { $0.id == step.id }) else { return }
-        var copy = step
-        copy.id = UUID()
-        script.steps.insert(copy, at: i + 1)
+    private func clear() {
+        if confirm("Clear this script?", "All the text in it will be removed.", ok: "Clear") { script.text = "" }
     }
 
     private var runBar: some View {
@@ -218,94 +193,6 @@ struct ScriptView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 14)
-    }
-}
-
-// MARK: - Step card
-
-struct StepCard: View {
-    @Binding var step: Step
-    let number: Int
-    let wpm: Int
-    var focus: FocusState<UUID?>.Binding
-    let startHere: () -> Void
-    let duplicate: () -> Void
-    let remove: () -> Void
-
-    private var seconds: Int { step.duration(wpm: wpm) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary).help("Drag a card to reorder")
-                Text("\(number)")
-                    .font(.system(.callout, design: .rounded).weight(.bold))
-                    .foregroundStyle(.black)
-                    .frame(width: 24, height: 24)
-                    .background(brand, in: Circle())
-                TextField("Step title, e.g. How a request flows", text: $step.title)
-                    .textFieldStyle(.plain)
-                    .font(.headline)
-                    .focused(focus, equals: step.id)
-                Text((step.seconds ?? 0) > 0 ? "\(clock(seconds)) fixed" : "≈ \(clock(seconds))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                Menu {
-                    Button("Start from here", action: startHere)
-                    Button("Duplicate", action: duplicate)
-                    Divider()
-                    Button("Delete step", role: .destructive) {
-                        if (step.title + step.say + step.cue).isEmpty || confirm("Delete step \(number)?", "What you wrote in it will be lost.") { remove() }
-                    }
-                } label: { Image(systemName: "ellipsis") }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-            }
-            labeled("What to say") { SayEditor(text: $step.say) }
-            HStack(alignment: .bottom, spacing: 16) {
-                labeled("Show on screen") {
-                    TextField("e.g. README and the repo root", text: $step.cue).textFieldStyle(.roundedBorder)
-                }
-                labeled("Auto time (sec)") {
-                    TextField("auto", value: $step.seconds, format: .number).textFieldStyle(.roundedBorder).frame(width: 90)
-                }
-            }
-        }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.1)))
-    }
-
-    private func labeled<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-            content()
-        }
-    }
-}
-
-/// Multi-line field that grows with its text, so the card never scrolls inside the list.
-struct SayEditor: View {
-    @Binding var text: String
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            Text(verbatim: text + "\n").padding(.horizontal, 5).padding(.vertical, 8).opacity(0)
-            TextEditor(text: $text).scrollContentBackground(.hidden)
-            if text.isEmpty {
-                Text(verbatim: "Type or paste what you'll say. Pasting a whole script splits it into steps.\nBlank line = new paragraph  ·  “- ” = bullet  ·  **bold** = highlight")
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 8)
-                    .allowsHitTesting(false)
-            }
-        }
-        .font(.body)
-        .frame(minHeight: 76)
-        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.12)))
     }
 }
 

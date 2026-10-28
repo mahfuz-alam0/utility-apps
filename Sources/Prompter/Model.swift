@@ -17,10 +17,34 @@ struct Step: Codable, Identifiable, Equatable {
     var seconds: Int?   // Auto mode: fixed time; nil = estimate from word count
 }
 
+/// The script is plain text; steps are parsed from it (`pasteSteps`) when you start.
 struct Script: Codable, Identifiable, Equatable {
     var id = UUID()
     var name = "Untitled script"
-    var steps: [Step] = []
+    var text = ""
+    var steps: [Step] { pasteSteps(text) }
+
+    init(name: String = "Untitled script", text: String = "") {
+        self.name = name
+        self.text = text
+    }
+
+    private enum Keys: String, CodingKey { case id, name, text, steps }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: Keys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        // libraries saved before the text editor stored a list of step cards
+        text = try c.decodeIfPresent(String.self, forKey: .text) ?? exportText(try c.decode([Step].self, forKey: .steps))
+    }
+
+    func encode(to e: Encoder) throws {
+        var c = e.container(keyedBy: Keys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(text, forKey: .text)
+    }
 }
 
 struct Library: Codable {
@@ -119,8 +143,12 @@ func importSteps(_ text: String) -> [Step] {
         if steps.isEmpty { steps.append(Step()) }
         if s.hasPrefix(">") {
             let c = s.dropFirst().trimmingCharacters(in: .whitespaces)
-                .replacingOccurrences(of: #"^(?i)show:\s*"#, with: "", options: .regularExpression)
-            steps[steps.count - 1].cue += (steps[steps.count - 1].cue.isEmpty ? "" : "; ") + c
+            if let r = c.range(of: #"^(?i)time:\s*\d+"#, options: .regularExpression) {  // fixed seconds for Auto mode
+                steps[steps.count - 1].seconds = Int(c[r].filter(\.isNumber))
+                continue
+            }
+            let cue = c.replacingOccurrences(of: #"^(?i)show:\s*"#, with: "", options: .regularExpression)
+            steps[steps.count - 1].cue += (steps[steps.count - 1].cue.isEmpty ? "" : "; ") + cue
         } else {
             say.append(s.range(of: #"^-{3,}$"#, options: .regularExpression) != nil ? "" : s)
         }
@@ -147,6 +175,7 @@ func exportText(_ steps: [Step]) -> String {
         var out = "# \(s.title.isEmpty ? "Step \(i + 1)" : s.title)\n"
         if !s.say.isEmpty { out += s.say + "\n" }
         if !s.cue.isEmpty { out += "> Show: \(s.cue)\n" }
+        if let t = s.seconds, t > 0 { out += "> Time: \(t)\n" }
         return out
     }.joined(separator: "\n")
 }
@@ -190,7 +219,7 @@ final class Store: ObservableObject {
             scripts = lib.scripts
             selection = lib.selection
         }
-        if scripts.isEmpty { scripts = [Script(steps: [Step()])] }
+        if scripts.isEmpty { scripts = [Script()] }
         if !scripts.contains(where: { $0.id == selection }) { selection = scripts[0].id }
         loadKeys()
         saver = objectWillChange.debounce(for: .seconds(0.4), scheduler: DispatchQueue.main).sink { [weak self] _ in self?.save() }
@@ -223,7 +252,7 @@ final class Store: ObservableObject {
     // MARK: scripts
 
     func newScript() {
-        let s = Script(steps: [Step()])
+        let s = Script()
         scripts.append(s)
         selection = s.id
     }
@@ -233,7 +262,6 @@ final class Store: ObservableObject {
         var copy = scripts[i]
         copy.id = UUID()
         copy.name += " copy"
-        copy.steps = copy.steps.map { var s = $0; s.id = UUID(); return s }
         scripts.insert(copy, at: i + 1)
         selection = copy.id
     }
@@ -250,8 +278,7 @@ final class Store: ObservableObject {
         p.message = "Choose a text file. Lines starting with # become steps; without them, each paragraph does."
         guard p.runModal() == .OK, let url = p.url else { return }
         do {
-            let steps = pasteSteps(try String(contentsOf: url, encoding: .utf8))
-            let s = Script(name: url.deletingPathExtension().lastPathComponent, steps: steps.isEmpty ? [Step()] : steps)
+            let s = Script(name: url.deletingPathExtension().lastPathComponent, text: try String(contentsOf: url, encoding: .utf8))
             scripts.append(s)
             selection = s.id
         } catch {
@@ -265,7 +292,7 @@ final class Store: ObservableObject {
         p.allowedContentTypes = [.plainText]
         p.nameFieldStringValue = s.name + ".txt"
         guard p.runModal() == .OK, let url = p.url else { return }
-        do { try exportText(s.steps).write(to: url, atomically: true, encoding: .utf8) } catch {
+        do { try s.text.write(to: url, atomically: true, encoding: .utf8) } catch {
             alert("Could not export", error.localizedDescription)
         }
     }

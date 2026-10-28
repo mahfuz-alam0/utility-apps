@@ -1,12 +1,14 @@
 #!/bin/sh
 # One entry point for both apps (each has its own script in Scripts/<app>/).
-#   ./bundle.sh [clipboard|prompter|all] [args]   default: all
-#   ./bundle.sh prompter install                  extra args go to that app's script (prompter: install | dmg)
+#   ./bundle.sh clipboard             only Clipboard Manager (.app + .dmg)
+#   ./bundle.sh prompter              only Prompter (.app + .dmg)
+#   ./bundle.sh prompter install      only Prompter, install to /Applications and launch (also: prompter app = .app only)
+#   ./bundle.sh                       both (same as: all)
 set -e
 cd "$(dirname "$0")"
 case "${1:-all}" in
   clipboard) shift; exec Scripts/clipboard/bundle.sh "$@" ;;
-  prompter)  shift; exec Scripts/prompter/bundle.sh "$@" ;;
+  prompter)  shift; [ $# -eq 0 ] && set -- dmg; [ "$1" = app ] && shift; exec Scripts/prompter/bundle.sh "$@" ;;
   all)       Scripts/clipboard/bundle.sh; Scripts/prompter/bundle.sh dmg ;;
   *)         echo "usage: ./bundle.sh [clipboard|prompter|all] [args]" >&2; exit 1 ;;
 esac
