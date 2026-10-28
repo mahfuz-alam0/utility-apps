@@ -1,0 +1,52 @@
+import AppKit
+import Combine
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let settings = Settings.shared
+    private lazy var store = ClipStore(settings: settings)
+    private lazy var monitor = ClipboardMonitor(store: store, settings: settings)
+    private lazy var popup = PopupController(store: store, settings: settings)
+    private let settingsWindow = SettingsWindow()
+    private var statusItem: NSStatusItem!
+    private let pauseItem = NSMenuItem(title: "Pause Recording", action: #selector(togglePause), keyEquivalent: "")
+    private var bag = Set<AnyCancellable>()
+
+    func applicationDidFinishLaunching(_ n: Notification) {
+        // Accessibility: simulated ⌘V + caret lookup. Shows the system prompt once.
+        _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+
+        monitor.start()
+
+        // Each sink fires once immediately (initial setup), then on every change.
+        settings.$theme.sink { NSApp.appearance = $0.appearance }.store(in: &bag)
+        settings.$paused.sink { [pauseItem] in pauseItem.state = $0 ? .on : .off }.store(in: &bag)
+        settings.$hotKey.sink { [popup] spec in HotKey.register(spec) { popup.toggle() } }.store(in: &bag)
+
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        let icon = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Clipboard history")
+        icon?.isTemplate = true  // tints for light/dark menu bar
+        statusItem.button?.image = icon
+
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Show History", action: #selector(show), keyEquivalent: "").target = self
+        pauseItem.target = self
+        menu.addItem(pauseItem)
+        menu.addItem(withTitle: "Clear History", action: #selector(clear), keyEquivalent: "").target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate), keyEquivalent: "q")
+        statusItem.menu = menu
+    }
+
+    @objc private func show() { popup.toggle() }
+    @objc private func clear() { store.clear() }
+    @objc private func togglePause() { settings.paused.toggle() }
+    @objc private func openSettings() { settingsWindow.show(settings: settings, store: store) }
+}
+
+let app = NSApplication.shared
+let delegate = AppDelegate()
+app.delegate = delegate
+app.setActivationPolicy(.accessory)
+app.run()
