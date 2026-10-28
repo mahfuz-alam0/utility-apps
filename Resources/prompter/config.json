@@ -1,0 +1,10 @@
+{
+  "shortcuts": {
+    "next": "CommandOrControl+N",
+    "prev": "CommandOrControl+Shift+N",
+    "toggleAuto": "CommandOrControl+Alt+A",
+    "toggleVisible": "CommandOrControl+Alt+P",
+    "toggleLock": "CommandOrControl+Alt+L",
+    "stop": "CommandOrControl+Alt+Q"
+  }
+}

@@ -7,5 +7,7 @@ let package = Package(
     targets: [
         .executableTarget(name: "ClipboardManager"),
         .testTarget(name: "ClipboardManagerTests", dependencies: ["ClipboardManager"]),
+        .executableTarget(name: "Prompter"),
+        .testTarget(name: "PrompterTests", dependencies: ["Prompter"]),
     ]
 )

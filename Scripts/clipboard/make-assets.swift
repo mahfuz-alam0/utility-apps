@@ -85,10 +85,10 @@ for (name, px) in [("16x16", 16), ("16x16@2x", 32), ("32x32", 32), ("32x32@2x", 
                    ("256x256", 256), ("256x256@2x", 512), ("512x512", 512), ("512x512@2x", 1024)] {
     try png(px).write(to: URL(fileURLWithPath: "\(set)/icon_\(name).png"))
 }
-try fm.createDirectory(atPath: "Resources", withIntermediateDirectories: true)
+try fm.createDirectory(atPath: "Resources/clipboard", withIntermediateDirectories: true)
 let p = Process()
 p.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
-p.arguments = ["-c", "icns", set, "-o", "Resources/AppIcon.icns"]
+p.arguments = ["-c", "icns", set, "-o", "Resources/clipboard/AppIcon.icns"]
 try p.run(); p.waitUntilExit()
-try render(w: 1320, h: 800, design: 660, dpi: 144, drawBackground).write(to: URL(fileURLWithPath: "Resources/dmg-background.png"))
-print("wrote Resources/AppIcon.icns, Resources/dmg-background.png")
+try render(w: 1320, h: 800, design: 660, dpi: 144, drawBackground).write(to: URL(fileURLWithPath: "Resources/clipboard/dmg-background.png"))
+print("wrote Resources/clipboard/AppIcon.icns, Resources/clipboard/dmg-background.png")
