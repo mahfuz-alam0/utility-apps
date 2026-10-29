@@ -107,3 +107,38 @@ If `swift test` fails once with `plugin for module 'TestingMacros' not found`, r
 ## Extend
 
 Search field, per-app ignore list (check `NSWorkspace.frontmostApplication.bundleIdentifier` in `ClipboardMonitor.poll`), launch at login (`SMAppService.mainApp.register()`), user-configurable hotkey/size, emoji categories/skin tones/recents, symbol tabs.
+
+# Downloader
+
+IDM-style download accelerator for macOS. Swift, SwiftUI + URLSession, no dependencies. `./bundle.sh downloader install` builds and installs it.
+
+- Splits a file into ranged pieces and fetches them over several connections at once (Settings in the footer: 1–32, default 8). Pieces are smaller than the connection count, so a finished connection picks up the next piece.
+- Pause/resume, also across quits. Progress is saved in `~/Library/Application Support/Downloader/downloads.json`; the partial file is `<name>.part` in the save folder. Resume restarts from zero if the server's size or ETag changed.
+- Add with ⌘N (pre-fills a URL from the clipboard), drop a link on the window, or capture from the browser (below). Retries a failed piece 4 times.
+- Servers without `Range` support download over one connection and cannot resume.
+
+## Browser capture
+
+Off by default. Turn on the **Capture browser downloads** switch in the app window; while it is on (and the app is running, window open or not) the extension hands every browser download to the app. Switch off, or app not running: the browser downloads as usual.
+
+Install the extension once (Chrome, Edge, Brave, Arc, Opera): `chrome://extensions` → Developer mode → Load unpacked → pick the folder. In the app, File → Show Browser Extension in Finder opens it; in the repo it is [Resources/downloader/extension/](Resources/downloader/extension/). Safari and Firefox are not covered.
+
+How it works: the app listens on `127.0.0.1:48620` (loopback only, [Server.swift](Sources/Downloader/Server.swift)). The extension's `downloads.onCreated` handler asks `GET /status`; if capture is on it sends `POST /add` with the URL, referrer and the browser's cookies for that URL, and only then cancels the browser's own download. The app sends the cookie and referrer on every request, so login-protected downloads work. `/add` rejects any request whose `Origin` is not `chrome-extension://` or `moz-extension://`, so a web page cannot add downloads to your app. Cookies are dropped on a redirect to another host (CDN).
+
+- The cookies are stored in plain text in `downloads.json` so a resume after quitting still works. Remove the item to delete them.
+- The extension asks for `<all_urls>` and `cookies` because it needs the cookies of whatever site you download from.
+- Form/POST downloads and `blob:` downloads cannot be re-fetched by URL; the browser keeps those.
+- Any installed extension can use `/add`, not only this one. Pin the extension ID in `Server.swift` if that matters.
+- The port is fixed. If another program holds 48620, capture silently does nothing.
+
+How a download runs: `probe` sends `Range: bytes=0-0` (206 + `Content-Range` gives size and range support, `suggestedFilename` gives the name) → `Job` splits, preallocates the `.part` file, and each connection writes its piece with `pwrite` at the right offset → rename when all pieces are done. Each connection has its own `URLSession`: over HTTP/2 one shared session would multiplex everything onto a single TCP connection and the speedup would vanish.
+
+Tests: `swift test --filter DownloaderTests` runs against a local range-capable server (byte-exact result, resume skips finished bytes, no-Range fallback). Measured against a local server capped at ~1.3 MB/s per connection: 8 MB took 6.4 s on 1 connection, 0.9 s on 8.
+
+## Downloader limitations
+
+- Faster only when the server throttles per connection (most file hosts and CDNs do). A server that caps your total bandwidth, or a link that is already saturated, gains nothing.
+- Links that expire or are single-use (some "click to download" pages) can fail on resume or on the extra probe request.
+- No queue/scheduler, speed limit, proxy settings, checksum check, or segment re-splitting while running.
+- Not code-signed beyond ad-hoc. The first download into `~/Downloads` triggers the macOS folder-access prompt.
+- Verified: build, tests, launch, window size, and the app's side of capture with `curl` posing as the extension (switch off/on, bad origin, cookie + referrer reach the file server, byte-identical result). Not verified: the extension inside a real browser, the UI visually (no screen capture available), real internet servers.

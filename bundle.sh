@@ -3,12 +3,14 @@
 #   ./bundle.sh clipboard             only Clipboard Manager (.app + .dmg)
 #   ./bundle.sh prompter              only Prompter (.app + .dmg)
 #   ./bundle.sh prompter install      only Prompter, install to /Applications and launch (also: prompter app = .app only)
-#   ./bundle.sh                       both (same as: all)
+#   ./bundle.sh downloader            only Downloader (.app; add "install" to install to /Applications and launch)
+#   ./bundle.sh                       all three (same as: all)
 set -e
 cd "$(dirname "$0")"
 case "${1:-all}" in
   clipboard) shift; exec Scripts/clipboard/bundle.sh "$@" ;;
   prompter)  shift; [ $# -eq 0 ] && set -- dmg; [ "$1" = app ] && shift; exec Scripts/prompter/bundle.sh "$@" ;;
-  all)       Scripts/clipboard/bundle.sh; Scripts/prompter/bundle.sh dmg ;;
-  *)         echo "usage: ./bundle.sh [clipboard|prompter|all] [args]" >&2; exit 1 ;;
+  downloader) shift; exec Scripts/downloader/bundle.sh "$@" ;;
+  all)       Scripts/clipboard/bundle.sh; Scripts/prompter/bundle.sh dmg; Scripts/downloader/bundle.sh ;;
+  *)         echo "usage: ./bundle.sh [clipboard|prompter|downloader|all] [args]" >&2; exit 1 ;;
 esac
