@@ -3,7 +3,7 @@
 #   ./bundle.sh clipboard             only Clipboard Manager (.app + .dmg)
 #   ./bundle.sh prompter              only Prompter (.app + .dmg)
 #   ./bundle.sh prompter install      only Prompter, install to /Applications and launch (also: prompter app = .app only)
-#   ./bundle.sh downloader            only Downloader (.app; add "install" to install to /Applications and launch)
+#   ./bundle.sh downloader            only Downloader (.app + .dmg; add "install" to install to /Applications and launch)
 #   ./bundle.sh                       all three (same as: all)
 set -e
 cd "$(dirname "$0")"

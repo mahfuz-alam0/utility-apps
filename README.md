@@ -110,7 +110,7 @@ Search field, per-app ignore list (check `NSWorkspace.frontmostApplication.bundl
 
 # Downloader
 
-IDM-style download accelerator for macOS. Swift, SwiftUI + URLSession, no dependencies. `./bundle.sh downloader install` builds and installs it.
+IDM-style download accelerator for macOS. Swift, SwiftUI + URLSession, no dependencies. `./bundle.sh downloader` builds `build/Downloader.dmg` (and `.build/Downloader.app`); `./bundle.sh downloader install` also installs it to /Applications and launches it.
 
 - Splits a file into ranged pieces and fetches them over several connections at once (Settings in the footer: 1–32, default 8). Pieces are smaller than the connection count, so a finished connection picks up the next piece.
 - Pause/resume, also across quits. Progress is saved in `~/Library/Application Support/Downloader/downloads.json`; the partial file is `<name>.part` in the save folder. Resume restarts from zero if the server's size or ETag changed.

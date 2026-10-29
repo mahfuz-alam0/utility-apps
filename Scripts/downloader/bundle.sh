@@ -1,7 +1,7 @@
 #!/bin/sh
-# Builds .build/Downloader.app (native Swift + SwiftUI, no dependencies).
-#   ./bundle.sh downloader           build .build/Downloader.app
-#   ./bundle.sh downloader install   build, then install to /Applications and launch
+# Builds .build/Downloader.app and build/Downloader.dmg (native Swift + SwiftUI, no dependencies).
+#   ./bundle.sh downloader           build both
+#   ./bundle.sh downloader install   also install to /Applications and launch
 set -e
 cd "$(dirname "$0")/../.."
 APP=.build/Downloader.app
@@ -40,6 +40,16 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 codesign --force --sign - "$APP"
 du -sh "$APP"
+
+# plain drag-to-Applications disk image (no Finder window layout, so it also works without a desktop session)
+TMP=$(mktemp -d)
+mkdir -p build
+cp -R "$APP" "$TMP/"
+ln -s /Applications "$TMP/Applications"
+rm -f build/Downloader.dmg
+hdiutil create -quiet -volname Downloader -srcfolder "$TMP" -fs HFS+ -format UDZO -o build/Downloader.dmg
+rm -rf "$TMP"
+echo "Built $(pwd)/build/Downloader.dmg"
 
 if [ "$1" = "install" ]; then
   pkill -x Downloader 2>/dev/null || true
