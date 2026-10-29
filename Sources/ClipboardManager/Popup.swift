@@ -163,7 +163,7 @@ struct PopupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
+            HStack(spacing: 0) {
                 tabButton(.emoji, symbol: "face.smiling", label: "Emoji")
                 tabButton(.clipboard, symbol: "doc.on.clipboard", label: "Clipboard history")
                 Spacer()
@@ -199,7 +199,7 @@ struct PopupView: View {
         return Button { model.tab = tab } label: {
             Image(systemName: symbol).font(.system(size: 14))
                 .foregroundStyle(on ? Color.accentColor : Color.secondary)
-                .frame(width: 44, height: 32).contentShape(Rectangle())
+                .frame(width: 32, height: 32).contentShape(Rectangle())
                 .overlay(alignment: .bottom) { if on { Capsule().fill(Color.accentColor).frame(width: 16, height: 2) } }
         }
         .buttonStyle(.plain).accessibilityLabel(label)
@@ -257,35 +257,46 @@ struct Row: View {
     private var hovered: Bool { model.hovered == item.id }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 6) {
-                if let t = item.text {
-                    Text(t).font(.system(size: 13)).lineLimit(4).frame(maxWidth: .infinity, alignment: .leading)
-                } else if let n = item.image, let img = store.thumbnail(n) {
-                    Image(nsImage: img).resizable().scaledToFit().frame(maxHeight: 140)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-                if settings.showTimestamps {
-                    Text(item.date.formatted(.relative(presentation: .named)))
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                }
+        VStack(alignment: .leading, spacing: 6) {
+            if let t = item.text {
+                Text(t).font(.system(size: 13)).lineLimit(4).frame(maxWidth: .infinity, alignment: .leading)
+            } else if let n = item.image {
+                // fixed slot: row height must not depend on aspect ratio or on whether the thumbnail has loaded
+                Color.primary.opacity(0.05).frame(maxWidth: .infinity).frame(height: 96)
+                    .overlay(alignment: .leading) {
+                        if let img = store.thumbnail(n) { Image(nsImage: img).resizable().scaledToFit() }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
             }
-            if selected || hovered {
-                HStack(spacing: 0) {
-                    IconButton(symbol: item.pinned ? "pin.slash" : "pin", label: item.pinned ? "Unpin" : "Pin") { store.togglePin(item) }
-                    IconButton(symbol: "xmark", label: "Delete") { store.remove(item) }
-                }
-            } else if item.pinned {
-                Image(systemName: "pin.fill").font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 2)
+            if settings.showTimestamps {
+                Text(item.date.formatted(.relative(presentation: .named)))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, item.pinned ? 16 : 0)  // room for the pin mark; hover buttons overlay instead so nothing reflows
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(RoundedRectangle(cornerRadius: 4).fill(selected || hovered ? Color.cardHover : Color.card))
         .overlay(RoundedRectangle(cornerRadius: 4)
             .strokeBorder(selected ? Color.accentColor : Color.cardStroke, lineWidth: selected ? 2 : 1))
+        .overlay(alignment: .topTrailing) { actions }
         .contentShape(Rectangle())
         .onHover { if $0 { model.hovered = item.id } else if model.hovered == item.id { model.hovered = nil } }
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder private var actions: some View {
+        if selected || hovered {
+            HStack(spacing: 0) {
+                IconButton(symbol: item.pinned ? "pin.slash" : "pin", label: item.pinned ? "Unpin" : "Pin") { store.togglePin(item) }
+                IconButton(symbol: "xmark", label: "Delete") { store.remove(item) }
+            }
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+            .padding(.top, 8).padding(.trailing, 8)
+        } else if item.pinned {
+            Image(systemName: "pin.fill").font(.system(size: 11)).foregroundStyle(.secondary)
+                .padding(.top, 12).padding(.trailing, 12)
+        }
     }
 }
 
