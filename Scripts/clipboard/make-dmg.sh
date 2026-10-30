@@ -1,12 +1,15 @@
 #!/bin/sh
-# Usage: Scripts/clipboard/make-dmg.sh .build/ClipboardManager.app
-# Builds build/ClipboardManager.dmg: drag-to-Applications installer window (660x400, background art, volume icon).
+# Usage: [NAME="Volume Name"] [BG=background.png] Scripts/clipboard/make-dmg.sh .build/ClipboardManager.app
+# Builds build/<App>.dmg: drag-to-Applications installer window (660x400, background art, volume icon from the app's AppIcon.icns).
+# Defaults are Clipboard Manager's; Adwall overrides NAME and BG.
 # Window layout is set through Finder (AppleScript); macOS may ask once to let your terminal/editor control Finder.
 set -e
 cd "$(dirname "$0")/../.."
 APP=$1
-NAME="Clipboard Manager"
-OUT=build/ClipboardManager.dmg
+ITEM=$(basename "$APP")
+NAME=${NAME:-Clipboard Manager}
+BG=${BG:-Resources/clipboard/dmg-background.png}
+OUT=build/${ITEM%.app}.dmg
 RW=build/rw.dmg
 STAGE=build/dmg
 MNT="/Volumes/$NAME"
@@ -17,7 +20,7 @@ rm -rf "$STAGE" "$RW" "$OUT"
 mkdir -p "$STAGE/.background"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
-cp Resources/clipboard/dmg-background.png "$STAGE/.background/bg.png"
+cp "$BG" "$STAGE/.background/bg.png"
 
 hdiutil create -quiet -volname "$NAME" -srcfolder "$STAGE" -fs HFS+ -format UDRW -ov "$RW"
 rm -rf "$STAGE"
@@ -38,7 +41,7 @@ tell application "Finder"
     set icon size of opts to 128
     set text size of opts to 13
     set background picture of opts to file ".background:bg.png"
-    set position of item "ClipboardManager.app" of container window to {170, 190}
+    set position of item "$ITEM" of container window to {170, 190}
     set position of item "Applications" of container window to {490, 190}
     close
     open
@@ -51,7 +54,7 @@ EOF
 
 # volume icon goes in last: hdiutil -srcfolder drops it, and Finder deletes it / resets the flag while styling
 sleep 2
-cp Resources/clipboard/AppIcon.icns "$MNT/.VolumeIcon.icns"
+cp "$APP/Contents/Resources/AppIcon.icns" "$MNT/.VolumeIcon.icns"
 SetFile -a C "$MNT"
 sync
 sleep 1

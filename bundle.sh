@@ -3,7 +3,7 @@
 #   ./bundle.sh clipboard             only Clipboard Manager (.app + .dmg)
 #   ./bundle.sh prompter              only Prompter (.app + .dmg)
 #   ./bundle.sh prompter install      only Prompter, install to /Applications and launch (also: prompter app = .app only)
-#   ./bundle.sh adwall                only Adwall (.app); adwall install = also install to /Applications and launch
+#   ./bundle.sh adwall                only Adwall (.app + .dmg); adwall app = .app only; adwall install = .app, install to /Applications and launch
 #   ./bundle.sh                       clipboard + prompter (same as: all)
 set -e
 cd "$(dirname "$0")"

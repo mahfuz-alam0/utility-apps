@@ -1,8 +1,9 @@
 #!/bin/sh
-# Builds .build/Adwall.app (arm64 + x86_64, hardened runtime). Ad-hoc signed by default;
+# Builds .build/Adwall.app + build/Adwall.dmg (arm64 + x86_64, hardened runtime). Ad-hoc signed by default;
 # SIGN_ID="Developer ID Application: Name (TEAMID)" signs for distribution.
-#   ./bundle.sh adwall           build .build/Adwall.app
-#   ./bundle.sh adwall install   build, then install to /Applications and launch
+#   ./bundle.sh adwall           build .build/Adwall.app + build/Adwall.dmg (drag-to-Applications installer)
+#   ./bundle.sh adwall app       .app only
+#   ./bundle.sh adwall install   build .app, then install to /Applications and launch
 # Install before turning protection on: the daemon removes itself if the app it was set up from disappears.
 set -e
 cd "$(dirname "$0")/../.."
@@ -11,7 +12,7 @@ ARCHS="--arch arm64 --arch x86_64"
 swift build -c release $ARCHS --product Adwall
 BIN=$(swift build -c release $ARCHS --show-bin-path)
 
-APP=.build/Adwall.app
+APP=.build/Adwall.app  # not in build/, so build/ holds only the .dmg
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Adwall" "$APP/Contents/MacOS/"
@@ -45,6 +46,13 @@ codesign --force --deep --options runtime $TS -s "${SIGN_ID:--}" "$APP"
 codesign --verify --deep --strict "$APP"
 echo "Adwall: $(lipo -archs "$APP/Contents/MacOS/Adwall")"
 echo "built $APP"
+
+if [ "$1" != "app" ] && [ "$1" != "install" ]; then
+  BG=$(mktemp -t adwall-bg).png
+  swift Scripts/prompter/makedmgbg.swift "$BG" Adwall
+  NAME=Adwall BG="$BG" Scripts/clipboard/make-dmg.sh "$APP"
+  rm -f "$BG"
+fi
 
 if [ "$1" = "install" ]; then
   pkill -x Adwall 2>/dev/null || true

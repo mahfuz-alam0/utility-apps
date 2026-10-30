@@ -1,7 +1,8 @@
-// Draws the DMG window background (660x400 pt, @2x): swiftc makedmgbg.swift -o makedmgbg && ./makedmgbg bg.png
+// Draws the DMG window background (660x400 pt, @2x): swiftc makedmgbg.swift -o makedmgbg && ./makedmgbg bg.png [AppName]
 import AppKit
 
 let out = CommandLine.arguments[1]
+let name = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "Prompter"
 let w: CGFloat = 660, h: CGFloat = 400
 let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(w) * 2, pixelsHigh: Int(h) * 2, bitsPerSample: 8, samplesPerPixel: 4,
                            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
@@ -16,8 +17,8 @@ func center(_ text: String, y: CGFloat, size: CGFloat, weight: NSFont.Weight, co
     let s = NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: size, weight: weight), .foregroundColor: color])
     s.draw(at: NSPoint(x: (w - s.size().width) / 2, y: y))
 }
-center("Install Prompter", y: 330, size: 24, weight: .bold, color: ink)
-center("Drag Prompter into your Applications folder", y: 304, size: 13, weight: .regular, color: ink.withAlphaComponent(0.55))
+center("Install \(name)", y: 330, size: 24, weight: .bold, color: ink)
+center("Drag \(name) into your Applications folder", y: 304, size: 13, weight: .regular, color: ink.withAlphaComponent(0.55))
 
 // arrow between the two icons (icon centres sit at y = 210 from the bottom)
 let arrow = NSBezierPath()
