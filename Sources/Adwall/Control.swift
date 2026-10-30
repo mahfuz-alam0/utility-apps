@@ -8,7 +8,7 @@ private func unixAddress(_ path: String) -> sockaddr_un {
   return addr
 }
 
-private func writeAll(_ fd: Int32, _ bytes: [UInt8]) {
+func writeAll(_ fd: Int32, _ bytes: [UInt8]) {
   var sent = 0
   while sent < bytes.count {
     let n = bytes[sent...].withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }

@@ -1,5 +1,4 @@
 import Foundation
-import Network
 
 private final class ByteBuffer: @unchecked Sendable {
   var bytes: Packet = []
@@ -8,8 +7,6 @@ private final class ByteBuffer: @unchecked Sendable {
 /// UDP + TCP DNS front end for a `DnsService`.
 final class DnsListener {
   private let service: DnsService
-  private let queue = DispatchQueue(label: "adwall.dns")
-  private var tcp: NWListener?
   private var udpFd: Int32 = -1
   private let stopped = Once()
 
@@ -17,12 +14,11 @@ final class DnsListener {
 
   func start(host: String, port: UInt16) async throws {
     try startUdp(host, port)
-    try await startTcp(host, port)
+    try startTcp(host, port)
   }
 
   func stop() {
     _ = stopped.claim()
-    tcp?.cancel()
   }
 
   // UDP uses a plain socket: no per-flow state, replies go back with sendto.
@@ -64,51 +60,62 @@ final class DnsListener {
     }
   }
 
-  private func startTcp(_ host: String, _ port: UInt16) async throws {
-    let parameters = NWParameters.tcp
-    parameters.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!)
-    let listener = try NWListener(using: parameters)
-    listener.newConnectionHandler = { [service, queue] connection in
-      connection.start(queue: queue)
-      // ponytail: hard 10s cap per connection, add idle tracking if clients pipeline long-lived TCP
-      queue.asyncAfter(deadline: .now() + 10) { connection.cancel() }
-      let buffer = ByteBuffer()
-
-      func read() {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65535) { data, _, complete, error in
-          if let data { buffer.bytes += data }
-          while buffer.bytes.count >= 2 {
-            let length = Int(buffer.bytes[0]) << 8 | Int(buffer.bytes[1])
-            if buffer.bytes.count < 2 + length { break }
-            let message = Array(buffer.bytes[2..<(2 + length)])
-            buffer.bytes.removeFirst(2 + length)
-            Task {
-              guard let response = await service.handle(message, viaUDP: false) else { return }
-              let frame = [UInt8(response.count >> 8), UInt8(response.count & 0xFF)] + response
-              connection.send(content: Data(frame), completion: .contentProcessed { _ in })
-            }
-          }
-          if error != nil || complete { return connection.cancel() }
-          read()
-        }
-      }
-      read()
+  // TCP is a plain socket too: NWListener binds all of loopback, which collides with other resolvers on 127.0.x.x:53 (e.g. Cloudflare WARP).
+  private func startTcp(_ host: String, _ port: UInt16) throws {
+    let fd = socket(AF_INET, SOCK_STREAM, 0)
+    guard fd >= 0 else { throw AdwallError("tcp socket failed") }
+    var on: Int32 = 1
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, socklen_t(MemoryLayout<Int32>.size))
+    var addr = inetAddress(host, port)
+    guard withSockAddr(&addr, { bind(fd, $0, $1) }) == 0, listen(fd, 64) == 0 else {
+      let reason = String(cString: strerror(errno))
+      close(fd)
+      throw AdwallError("cannot bind tcp \(host):\(port): \(reason)")
     }
+    setTimeouts(fd, seconds: 1)  // lets accept() wake up and notice stop()
 
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      let once = Once()
-      listener.stateUpdateHandler = { state in
-        switch state {
-        case .ready:
-          if once.claim() { continuation.resume() }
-        case .failed(let error):
-          if once.claim() { continuation.resume(throwing: AdwallError("cannot bind tcp \(host):\(port): \(error)")) }
-        default:
+    let service = service
+    let stopped = stopped
+    Thread.detachNewThread {
+      while !stopped.isClaimed {
+        let client = accept(fd, nil, nil)
+        if client < 0 {
+          if errno == EAGAIN || errno == EINTR || errno == ECONNABORTED { continue }
           break
         }
+        setTimeouts(client, seconds: 10)
+        Thread.detachNewThread { serveTcp(client, service) }
       }
-      listener.start(queue: queue)
+      close(fd)
     }
-    tcp = listener
+  }
+}
+
+/// One TCP connection: 2-byte length-prefixed messages, answered in order.
+private func serveTcp(_ fd: Int32, _ service: DnsService) {
+  defer { close(fd) }
+  // ponytail: hard 10s cap per connection, add idle tracking if clients pipeline long-lived TCP
+  let deadline = Date().addingTimeInterval(10)
+  var buffer = Packet()
+  var chunk = Packet(repeating: 0, count: 65535)
+  let capacity = chunk.count
+  while Date() < deadline {
+    while buffer.count >= 2 {
+      let length = Int(buffer[0]) << 8 | Int(buffer[1])
+      if buffer.count < 2 + length { break }
+      let message = Array(buffer[2..<(2 + length)])
+      buffer.removeFirst(2 + length)
+      let reply = ByteBuffer()
+      let done = DispatchSemaphore(value: 0)
+      Task {
+        reply.bytes = await service.handle(message, viaUDP: false) ?? []
+        done.signal()
+      }
+      done.wait()
+      if !reply.bytes.isEmpty { writeAll(fd, [UInt8(reply.bytes.count >> 8), UInt8(reply.bytes.count & 0xFF)] + reply.bytes) }
+    }
+    let n = read(fd, &chunk, capacity)
+    if n <= 0 { return }
+    buffer += chunk[0..<n]
   }
 }
