@@ -9,5 +9,7 @@ let package = Package(
         .testTarget(name: "ClipboardManagerTests", dependencies: ["ClipboardManager"]),
         .executableTarget(name: "Prompter"),
         .testTarget(name: "PrompterTests", dependencies: ["Prompter"]),
+        .executableTarget(name: "Adwall"),
+        .testTarget(name: "AdwallTests", dependencies: ["Adwall"]),
     ]
 )
