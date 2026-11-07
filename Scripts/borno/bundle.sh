@@ -1,8 +1,9 @@
 #!/bin/sh
-# Builds .build/Borno.app, an input method (arm64 + x86_64). Ad-hoc signed by default;
+# Builds .build/Borno.app + build/Borno.dmg, an input method (arm64 + x86_64). Ad-hoc signed by default;
 # SIGN_ID="Developer ID Application: Name (TEAMID)" signs for distribution.
-#   ./bundle.sh borno           build .build/Borno.app
-#   ./bundle.sh borno install   build, copy to ~/Library/Input Methods, register + enable the input source
+#   ./bundle.sh borno           build .build/Borno.app + build/Borno.dmg (drag to Applications, open once)
+#   ./bundle.sh borno app       .app only
+#   ./bundle.sh borno install   .app, then copy to ~/Library/Input Methods and register (same as opening Borno once)
 # After install: System Settings > Keyboard > Text Input > Input Sources > + > Bangla > Borno, then switch to it
 # from the menu bar (or Ctrl+Space). If it does not show up, log out and in once.
 set -e
@@ -68,6 +69,13 @@ codesign --force --deep --options runtime $TS -s "${SIGN_ID:--}" "$APP"
 codesign --verify --deep --strict "$APP"
 echo "Borno: $(lipo -archs "$APP/Contents/MacOS/Borno")"
 echo "built $APP"
+
+if [ "$1" != "app" ] && [ "$1" != "install" ]; then
+  BG=$(mktemp -t borno-bg).png
+  swift Scripts/prompter/makedmgbg.swift "$BG" Borno "Then open it once to add the keyboard"
+  NAME=Borno BG="$BG" Scripts/clipboard/make-dmg.sh "$APP"
+  rm -f "$BG"
+fi
 
 if [ "$1" = "install" ]; then
   DEST="$HOME/Library/Input Methods"

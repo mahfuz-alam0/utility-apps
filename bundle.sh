@@ -4,7 +4,7 @@
 #   ./bundle.sh prompter              only Prompter (.app + .dmg)
 #   ./bundle.sh prompter install      only Prompter, install to /Applications and launch (also: prompter app = .app only)
 #   ./bundle.sh adwall                only Adwall (.app + .dmg); adwall app = .app only; adwall install = .app, install to /Applications and launch
-#   ./bundle.sh borno                 only Borno (Bangla input method .app); borno install = copy to ~/Library/Input Methods + register
+#   ./bundle.sh borno                 only Borno (Bangla input method .app + .dmg); borno app = .app only; borno install = .app, copy to ~/Library/Input Methods + register
 #   ./bundle.sh                       clipboard + prompter (same as: all)
 set -e
 cd "$(dirname "$0")"

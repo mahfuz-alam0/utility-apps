@@ -163,10 +163,11 @@ Type `ami tomake bhalobashi`, get `আমি তোমাকে ভালোব�
 ## Install
 
 ```
-./bundle.sh borno install     # builds .build/Borno.app, copies to ~/Library/Input Methods, registers it
+./bundle.sh borno             # builds .build/Borno.app + build/Borno.dmg
+./bundle.sh borno install     # same .app, installed straight from the terminal
 ```
 
-Then System Settings → Keyboard → Text Input → Input Sources → + → Bangla → Borno. Switch with the menu-bar input menu or Ctrl+Space. Log out and in once if it is not listed. `./bundle.sh borno` builds without installing.
+Open `build/Borno.dmg`, drag Borno into Applications, then open it once: it copies itself to `~/Library/Input Methods` (macOS only loads input methods from there), registers, and shows a dialog. The copy in Applications can then be deleted. Then System Settings → Keyboard → Text Input → Input Sources → + → Bangla → Borno, and switch with the menu-bar input menu or Ctrl+Space. Log out and in once if it is not listed. `./bundle.sh borno app` builds the `.app` only.
 
 ## Keys
 

@@ -1,4 +1,4 @@
-// Draws the DMG window background (660x400 pt, @2x): swiftc makedmgbg.swift -o makedmgbg && ./makedmgbg bg.png [AppName]
+// Draws the DMG window background (660x400 pt, @2x): swiftc makedmgbg.swift -o makedmgbg && ./makedmgbg bg.png [AppName] [hint line]
 import AppKit
 
 let out = CommandLine.arguments[1]
@@ -19,6 +19,8 @@ func center(_ text: String, y: CGFloat, size: CGFloat, weight: NSFont.Weight, co
 }
 center("Install \(name)", y: 330, size: 24, weight: .bold, color: ink)
 center("Drag \(name) into your Applications folder", y: 304, size: 13, weight: .regular, color: ink.withAlphaComponent(0.55))
+
+if CommandLine.arguments.count > 3 { center(CommandLine.arguments[3], y: 282, size: 13, weight: .regular, color: ink.withAlphaComponent(0.55)) }
 
 // arrow between the two icons (icon centres sit at y = 210 from the bottom)
 let arrow = NSBezierPath()
