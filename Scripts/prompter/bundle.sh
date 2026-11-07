@@ -65,7 +65,7 @@ if [ "$1" = "dmg" ]; then
   hdiutil create -quiet -volname Prompter -srcfolder "$TMP/stage" -fs HFS+ -format UDRW -ov "$TMP/rw.dmg"
   hdiutil attach -quiet -noautoopen "$TMP/rw.dmg"
   sleep 2
-  osascript <<'EOF'
+  osascript <<'EOF' || echo "warning: could not style the DMG window (needs a Finder session); the dmg still works" >&2
 tell application "Finder"
   tell disk "Prompter"
     open

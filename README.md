@@ -10,6 +10,10 @@ Small, native macOS utilities. Swift, AppKit + SwiftUI, **zero third-party depen
 | **Borno** | Bangla phonetic keyboard (Avro-style) as a real macOS input method. | [docs/borno.md](docs/borno.md) |
 | **Toolkit** | One app that bundles all four. | [docs/toolkit.md](docs/toolkit.md) |
 
+## Download
+
+Grab a `.dmg` from [Releases](https://github.com/mahfuz-alam0/utility-apps/releases/latest): one per app (`ClipboardManager`, `Prompter`, `Adwall`, `Borno`), or `Toolkit.dmg` for all four in one app. Builds are ad-hoc signed, not notarized: first open with right-click → Open.
+
 ## Build
 
 macOS 14+ and the Swift toolchain (Command Line Tools is enough, Xcode not required).

@@ -36,6 +36,14 @@ If `swift test` fails once with `plugin for module 'TestingMacros' not found`, r
 
 Open an issue first if the idea is big, so we can agree on scope before you build it. App ideas that fit: small, offline, native, no account, no telemetry.
 
+## Release (maintainers)
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+[release.yml](.github/workflows/release.yml) runs the tests, builds the four app dmgs plus `Toolkit.dmg`, and attaches them to a new GitHub Release. Per-app versions live in `Scripts/<app>/VERSION`.
+
 ## Good first issues
 
 - Clipboard Manager: text search, per-app ignore list, emoji skin tones/categories/recents, store files and rich text.
