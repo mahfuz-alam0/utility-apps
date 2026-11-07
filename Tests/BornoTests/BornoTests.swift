@@ -40,6 +40,9 @@ private func realLexicon(learnedURL: URL? = nil) throws -> Lexicon {
   let lex = try realLexicon()
   #expect(lex.suggest("grishmokal").first == "গ্রীষ্মকাল")        // literal গ্রিশ্মকাল is a slip
   #expect(lex.suggest("rafi").first == "রাফি")                    // short: literal stays first
+  #expect(lex.suggest("gri").first == "গ্রি")                      // still typing: prefix first, not গড়ি
+  #expect(lex.suggest("gri").contains("গ্রিক"))                    // then real completions
+  #expect(lex.suggest("sarkar").first == "সরকার")                 // one stray vowel
   #expect(lex.suggest("suggestion").contains("সাজেশন"))           // English spelling, consonant-fuzzy hit
 }
 

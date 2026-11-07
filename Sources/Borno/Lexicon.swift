@@ -75,10 +75,11 @@ final class Lexicon {
 
     // Closest spelling first; on a tie prefer words that start like the input (ভালো over ওভাল for "bhalo").
     let first = phonetic.unicodeScalars.first
-    var exact: [(score: Int, word: String)] = []
+    var exact: [(score: Int, dist: Int, word: String)] = []
     while i < idx.keys.count, idx.keys[i] == key {
       let w = idx.words[i]
-      exact.append((2 * Self.distance(phonetic, w) + (w.unicodeScalars.first == first ? 0 : 1), w)); i += 1
+      let d = Self.distance(phonetic, w)
+      exact.append((2 * d + (w.unicodeScalars.first == first ? 0 : 1), d, w)); i += 1
     }
     exact.sort { $0.score < $1.score }
 
@@ -95,29 +96,37 @@ final class Lexicon {
       near.sort { $0.cons != $1.cons ? $0.cons < $1.cons : $0.skel < $1.skel }
     }
 
-    // The dictionary beats the literal result when it is the same word with a confusable letter or vowel
-    // (গ্রিশ্মকাল -> গ্রীষ্মকাল: same sound class) or one stray vowel off (সারকার -> সরকার). Names the
-    // dictionary lacks keep the literal first (mahfuz).
-    if let b = exact.first {
-      add(b.word)
-    } else if let b = near.filter({ $0.cons == 0 })
-      .map({ (Self.distance(phonetic, $0.word), $0.word) }).min(by: { $0.0 < $1.0 }),
-      b.0 * 5 <= phonetic.unicodeScalars.count {
-      add(b.1)
-    }
-    add(phonetic)
-    exact.forEach { add($0.word) }
-
     // Completions: longer words that start with what was typed. Scan is capped, so short input gives few.
+    var longer: [(Int, String)] = []
     if key.count >= 2 {
-      var longer: [(Int, String)] = []
       var scanned = 0
       while i < idx.keys.count, scanned < 400, idx.keys[i].starts(with: key) {
         longer.append((idx.keys[i].count - key.count, idx.words[i])); i += 1; scanned += 1
       }
       longer.sort { $0.0 != $1.0 ? $0.0 < $1.0 : Self.distance(phonetic, $0.1) < Self.distance(phonetic, $1.1) }
-      longer.forEach { add($0.1) }
     }
+
+    // The dictionary beats the literal result when what you typed cannot be the start of any real word, so
+    // the literal is a slip (গ্রিশ্মকাল -> গ্রীষ্মকাল: same sound class; সারকার -> সরকার: one stray vowel).
+    // While it still can be (গ্রি -> গ্রিক গ্রিস), the literal stays first. Names the dictionary lacks keep it too.
+    let len = phonetic.unicodeScalars.count
+    func extends(_ w: String) -> Bool { w.unicodeScalars.starts(with: phonetic.unicodeScalars) }
+    var typing = exact.contains { extends($0.word) }
+    var j = Self.lowerBound(key, in: idx.keys)   // `longer` is capped; this check is not
+    while !typing, j < idx.keys.count, idx.keys[j].starts(with: key) { typing = extends(idx.words[j]); j += 1 }
+    if !typing, let b = exact.first {
+      add(b.word)
+    } else if !typing, let b = near.filter({ $0.cons == 0 && $0.word.unicodeScalars.last == phonetic.unicodeScalars.last })  // same ending: একুশে is not একুশ
+      .map({ (Self.distance(phonetic, $0.word), $0.word) }).min(by: { $0.0 < $1.0 }), b.0 * 3 <= len {
+      add(b.1)
+    }
+    add(phonetic)
+    // Words one letter off (ভাল -> ভালো) first, then real completions of what was typed (গ্রি -> গ্রিক গ্রিস),
+    // then the rest of the look-alikes (গড়ি).
+    exact.filter { $0.dist <= 1 }.forEach { add($0.word) }
+    longer.filter { $0.1.hasPrefix(phonetic) }.forEach { add($0.1) }
+    exact.forEach { add($0.word) }
+    longer.forEach { add($0.1) }
     if maxD > 0 { near.forEach { add($0.word) } }
     return Array(out.prefix(limit))
   }
