@@ -27,6 +27,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleIdentifier</key><string>$ID</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>CFBundleName</key><string>Borno</string>
   <key>CFBundleDisplayName</key><string>Borno</string>
   <key>CFBundleExecutable</key><string>Borno</string>
@@ -62,6 +63,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+# Input Sources picker shows the mode ID unless InfoPlist.strings names it.
+mkdir -p "$APP/Contents/Resources/en.lproj"
+cat > "$APP/Contents/Resources/en.lproj/InfoPlist.strings" <<STRINGS
+"$ID.Bangla" = "Borno";
+CFBundleName = "Borno";
+CFBundleDisplayName = "Borno";
+STRINGS
 
 # Notarization needs a secure timestamp, which only a real identity can get.
 if [ -n "$SIGN_ID" ]; then TS=--timestamp; else TS=--timestamp=none; fi
