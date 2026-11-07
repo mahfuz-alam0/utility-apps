@@ -1,0 +1,6 @@
+Clipboard Manager
+Copyright (c) 2026 Mahfuz Alam. MIT License (see LICENSE.txt).
+
+All code and artwork are original. No third-party code or data is included.
+Clipboard history stays on your Mac (~/Library/Application Support/ClipboardManager); nothing is sent anywhere.
+Not affiliated with or endorsed by Microsoft or Apple.

@@ -13,3 +13,7 @@ jobs:
         run: swift test
       - name: Borno app builds (universal, signed ad hoc)
         run: ./bundle.sh borno app
+      - name: Adwall app builds
+        run: ./bundle.sh adwall app
+      - name: Prompter app builds
+        run: ./bundle.sh prompter app

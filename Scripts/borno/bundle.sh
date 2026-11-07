@@ -25,6 +25,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Borno" "$APP/Contents/MacOS/"
 cp Resources/borno/* "$APP/Contents/Resources/"
+cp LICENSE "$APP/Contents/Resources/LICENSE.txt"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -86,15 +87,7 @@ codesign --verify --deep --strict "$APP"
 echo "Borno: $(lipo -archs "$APP/Contents/MacOS/Borno")"
 
 # Apple scans the app, then the ticket is stapled so it also passes Gatekeeper offline.
-notarize() {
-  [ -n "$NOTARY_PROFILE" ] || return 0
-  SUBMIT=$1
-  if [ -d "$1" ]; then SUBMIT=build/notarize.zip; mkdir -p build; rm -f "$SUBMIT"; ditto -c -k --keepParent "$1" "$SUBMIT"; fi
-  xcrun notarytool submit "$SUBMIT" --keychain-profile "$NOTARY_PROFILE" --wait
-  xcrun stapler staple "$1"
-  [ "$SUBMIT" = "$1" ] || rm -f "$SUBMIT"
-}
-notarize "$APP"
+Scripts/notarize.sh "$APP"
 echo "built $APP ($VERSION, build $BUILD)"
 
 if [ "$1" != "app" ] && [ "$1" != "install" ]; then
@@ -103,7 +96,7 @@ if [ "$1" != "app" ] && [ "$1" != "install" ]; then
   NAME=Borno BG="$BG" Scripts/clipboard/make-dmg.sh "$APP"
   rm -f "$BG"
   if [ -n "$SIGN_ID" ]; then codesign --force --timestamp -s "$SIGN_ID" build/Borno.dmg; fi
-  notarize build/Borno.dmg
+  Scripts/notarize.sh build/Borno.dmg
 fi
 
 if [ "$1" = "install" ]; then

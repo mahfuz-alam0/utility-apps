@@ -1,4 +1,6 @@
 #!/bin/sh
+# Notarize: SIGN_ID="Developer ID Application: Name (TEAMID)" NOTARY_PROFILE=<keychain profile> ./bundle.sh prompter
+# Version: Scripts/prompter/VERSION; build number = git commit count.
 # Builds .build/Prompter.app (native Swift + SwiftUI, no dependencies).
 #   ./bundle.sh prompter           build .build/Prompter.app
 #   ./bundle.sh prompter install   build, then install to /Applications and launch
@@ -14,12 +16,16 @@ if [ ! -f Resources/prompter/AppIcon.icns ]; then
   rm -rf /tmp/AppIcon.iconset /tmp/prompter-makeicon
 fi
 
+VERSION=$(tr -d '[:space:]' < Scripts/prompter/VERSION)
+BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)
+if [ -n "$NOTARY_PROFILE" ] && [ -z "$SIGN_ID" ]; then echo "NOTARY_PROFILE needs SIGN_ID (a Developer ID Application identity)" >&2; exit 1; fi
 swift build -c release --product Prompter
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Prompter "$APP/Contents/MacOS/"
 cp Resources/prompter/* "$APP/Contents/Resources/"
-cat > "$APP/Contents/Info.plist" <<'EOF'
+cp LICENSE "$APP/Contents/Resources/LICENSE.txt"
+cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -30,13 +36,16 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
   <key>CFBundleName</key><string>Prompter</string>
   <key>CFBundleDisplayName</key><string>Prompter</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>2.0</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$BUILD</string>
+  <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Mahfuz Alam</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>
 EOF
-codesign --force --sign - "$APP"
+if [ -n "$SIGN_ID" ]; then codesign --force --options runtime --timestamp -s "$SIGN_ID" "$APP"; else codesign --force --sign - "$APP"; fi
+Scripts/notarize.sh "$APP"
 du -sh "$APP"
 
 if [ "$1" = "dmg" ]; then
@@ -85,6 +94,8 @@ EOF
   mkdir -p build
   rm -f build/Prompter.dmg
   hdiutil convert -quiet "$TMP/rw.dmg" -format UDZO -imagekey zlib-level=9 -o build/Prompter.dmg
+  if [ -n "$SIGN_ID" ]; then codesign --force --timestamp -s "$SIGN_ID" build/Prompter.dmg; fi
+  Scripts/notarize.sh build/Prompter.dmg
   echo "Built $(pwd)/build/Prompter.dmg"
 fi
 

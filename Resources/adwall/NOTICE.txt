@@ -1,0 +1,10 @@
+Adwall
+Copyright (c) 2026 Mahfuz Alam. MIT License (see LICENSE.txt).
+
+All code and artwork are original. No third-party code is included.
+
+Blocklists are not part of Adwall. By default it downloads them from their authors at runtime and
+keeps them on your Mac; each list stays under its own licence and belongs to its authors:
+  HaGeZi DNS Blocklists   https://github.com/hagezi/dns-blocklists   (GPL-3.0)
+  StevenBlack/hosts       https://github.com/StevenBlack/hosts       (MIT)
+Adwall changes your Mac's DNS settings while protection is on. Use it at your own risk.

@@ -217,3 +217,17 @@ Data: [Resources/borno/words.txt](Resources/borno/words.txt) and `autocorrect.tx
 - Apps that report no caret position get the list near the mouse.
 - No settings window, no fixed (non-phonetic) layouts.
 - Conjuncts follow Avro's table only (`kn` stays ক + ন).
+
+# License
+
+All apps here are open source under the [MIT License](LICENSE): use, copy, modify and redistribute freely, no warranty. Each built app carries `LICENSE.txt` and `NOTICE.txt` in its `Contents/Resources`.
+
+Third-party material, all credited in the app's `NOTICE.txt`:
+
+| App | What | Licence |
+|---|---|---|
+| Borno | `words.txt`, `autocorrect.txt` derived from Avro Keyboard (OmicronLab) | MPL 1.1 (those two files only) |
+| Adwall | HaGeZi and StevenBlack blocklists, downloaded at runtime, not bundled | GPL-3.0 / MIT, theirs |
+| Clipboard Manager, Prompter | nothing | |
+
+Releases: set `SIGN_ID` and `NOTARY_PROFILE` (see each `Scripts/<app>/bundle.sh`) so macOS opens them without the unidentified-developer warning. Versions live in `Scripts/<app>/VERSION`.

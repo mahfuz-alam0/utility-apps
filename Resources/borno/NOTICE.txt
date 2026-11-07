@@ -12,3 +12,5 @@ https://github.com/mahfuz-alam0/utility-apps (Scripts/borno/make-dictionary.py).
 The phonetic rules follow Avro Phonetic.
 
 Borno is not affiliated with or endorsed by OmicronLab.
+
+Borno's own code and artwork are under the MIT License (see LICENSE.txt); the MPL 1.1 above covers only the two data files.

@@ -1,0 +1,4 @@
+Prompter
+Copyright (c) 2026 Mahfuz Alam. MIT License (see LICENSE.txt).
+
+All code and artwork are original. No third-party code or data is included.
