@@ -42,7 +42,7 @@ if [ -n "$SIGN_ID" ]; then codesign --force --options runtime --timestamp -s "$S
 else codesign --force --sign - -r='designated => identifier "com.local.ClipboardManager"' "$APP"; fi
 Scripts/notarize.sh "$APP"
 echo "built $APP ($VERSION, build $BUILD)"
-[ "$1" = app ] && exit 0  # .app only (used by ./bundle.sh toolkit)
+[ "$1" = app ] && exit 0  # .app only
 
 Scripts/clipboard/make-dmg.sh "$APP"
 if [ -n "$SIGN_ID" ]; then codesign --force --timestamp -s "$SIGN_ID" build/ClipboardManager.dmg; fi

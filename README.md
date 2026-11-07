@@ -8,11 +8,10 @@ Small, native macOS utilities. Swift, AppKit + SwiftUI, **zero third-party depen
 | **Prompter** | On-screen script prompter for calls and recordings, hidden from screen sharing. | [docs/prompter.md](docs/prompter.md) |
 | **Adwall** | System-wide ad and tracker blocker (local filtering DNS + menu-bar app). | [docs/adwall.md](docs/adwall.md) |
 | **Borno** | Bangla phonetic keyboard (Avro-style) as a real macOS input method. | [docs/borno.md](docs/borno.md) |
-| **Toolkit** | One app that bundles all four. | [docs/toolkit.md](docs/toolkit.md) |
 
 ## Download
 
-Grab a `.dmg` from [Releases](https://github.com/mahfuz-alam0/utility-apps/releases/latest): one per app (`ClipboardManager`, `Prompter`, `Adwall`, `Borno`), or `Toolkit.dmg` for all four in one app. Builds are ad-hoc signed, not notarized: first open with right-click → Open.
+Grab a `.dmg` from [Releases](https://github.com/mahfuz-alam0/utility-apps/releases/latest): one per app (`ClipboardManager`, `Prompter`, `Adwall`, `Borno`). Builds are ad-hoc signed, not notarized: first open with right-click → Open.
 
 ## Build
 
@@ -22,7 +21,7 @@ macOS 14+ and the Swift toolchain (Command Line Tools is enough, Xcode not requi
 git clone https://github.com/mahfuz-alam0/utility-apps
 cd utility-apps
 swift test                       # all tests
-./bundle.sh clipboard            # or: prompter | adwall | borno | toolkit
+./bundle.sh clipboard            # or: prompter | adwall | borno
 ```
 
 Each build writes `.build/<App>.app` and `build/<App>.dmg`. `./bundle.sh <app> install` installs and launches it (Prompter, Adwall; Borno copies to `~/Library/Input Methods`; Clipboard Manager: drag it from the dmg). Builds are ad-hoc signed, so macOS may warn on first open; right-click → Open. Signing and notarizing: set `SIGN_ID` and `NOTARY_PROFILE` (see `Scripts/<app>/bundle.sh`).

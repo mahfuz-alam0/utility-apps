@@ -9,7 +9,7 @@ macOS 14+, Swift toolchain. No other dependencies.
 ```sh
 swift test                       # run before every PR
 swift test --filter PrompterTests
-./bundle.sh <app> app            # build one .app (clipboard | prompter | adwall | borno | toolkit)
+./bundle.sh <app> app            # build one .app (clipboard | prompter | adwall | borno)
 ```
 
 CI (`.github/workflows/ci.yml`) runs `swift test` and builds every app on each PR.
@@ -31,8 +31,7 @@ If `swift test` fails once with `plugin for module 'TestingMacros' not found`, r
 3. `Resources/<app>/NOTICE.txt` (copy Prompter's; list any third-party material) and an `AppIcon.icns` (a `makeicon.swift` in `Scripts/<app>/` can draw it).
 4. Register the app in the top-level [bundle.sh](bundle.sh) (`case` line and usage comment).
 5. Add a build step to [.github/workflows/ci.yml](.github/workflows/ci.yml).
-6. Add an entry to `tools` in [Sources/Toolkit/Toolkit.swift](Sources/Toolkit/Toolkit.swift) and embed it in `Scripts/toolkit/bundle.sh`, so Toolkit carries it.
-7. `docs/<app>.md` and a row in the README table.
+6. `docs/<app>.md` and a row in the README table.
 
 Open an issue first if the idea is big, so we can agree on scope before you build it. App ideas that fit: small, offline, native, no account, no telemetry.
 
@@ -42,7 +41,7 @@ Open an issue first if the idea is big, so we can agree on scope before you buil
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-[release.yml](.github/workflows/release.yml) runs the tests, builds the four app dmgs plus `Toolkit.dmg`, and attaches them to a new GitHub Release. Per-app versions live in `Scripts/<app>/VERSION`.
+[release.yml](.github/workflows/release.yml) runs the tests, builds the app dmgs, and attaches them to a new GitHub Release. Per-app versions live in `Scripts/<app>/VERSION`.
 
 ## Good first issues
 

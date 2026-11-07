@@ -1,9 +1,0 @@
-Toolkit
-Copyright (c) 2026 Mahfuz Alam. MIT License (see LICENSE.txt).
-
-Toolkit carries these apps in Contents/Helpers; each has its own LICENSE.txt and NOTICE.txt inside:
-  Clipboard Manager, Prompter, Adwall, Borno (all by Mahfuz Alam, MIT License)
-
-Third-party material, credited in the embedded notices:
-  Borno's dictionary data is derived from Avro Keyboard (OmicronLab), used under the Mozilla Public License 1.1.
-  Adwall downloads blocklists from HaGeZi and StevenBlack at runtime; they are not bundled.

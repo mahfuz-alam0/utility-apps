@@ -11,7 +11,6 @@ let package = Package(
         .testTarget(name: "PrompterTests", dependencies: ["Prompter"]),
         .executableTarget(name: "Adwall"),
         .testTarget(name: "AdwallTests", dependencies: ["Adwall"]),
-        .executableTarget(name: "Toolkit"),
         .executableTarget(name: "Borno"),
         .testTarget(name: "BornoTests", dependencies: ["Borno"]),
     ]

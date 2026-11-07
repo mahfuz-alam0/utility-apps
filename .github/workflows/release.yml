@@ -16,13 +16,13 @@ jobs:
           fetch-depth: 0  # build number = git commit count
       - name: Tests
         run: swift test
-      - name: Build all dmgs (the four apps + Toolkit)
-        run: for a in clipboard prompter adwall borno toolkit; do ./bundle.sh $a; done
+      - name: Build all dmgs (the four apps)
+        run: for a in clipboard prompter adwall borno; do ./bundle.sh $a; done
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd build
-          gh release create "$GITHUB_REF_NAME" ClipboardManager.dmg Prompter.dmg Adwall.dmg Borno.dmg Toolkit.dmg \
+          gh release create "$GITHUB_REF_NAME" ClipboardManager.dmg Prompter.dmg Adwall.dmg Borno.dmg \
             --generate-notes \
-            --notes "Builds are ad-hoc signed, not notarized. First open: right-click the app, then Open. Toolkit contains all four apps; the other dmgs install one each."
+            --notes "Builds are ad-hoc signed, not notarized. First open: right-click the app, then Open."
