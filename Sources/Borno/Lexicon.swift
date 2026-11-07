@@ -10,6 +10,7 @@ final class Lexicon {
   private struct Index {
     var keys: [[UInt8]] = []         // sorted
     var words: [String] = []         // parallel to keys
+    var cons: [[UInt8]] = []         // keys without vowels, parallel to keys (for fuzzy fallback)
     var autocorrect: [String: String] = [:]
   }
 
@@ -32,7 +33,8 @@ final class Lexicon {
       return k.isEmpty ? nil : (k, w)
     }
     pairs.sort { $0.0.lexicographicallyPrecedes($1.0) }
-    let built = Index(keys: pairs.map(\.0), words: pairs.map(\.1), autocorrect: autocorrect)
+    let built = Index(keys: pairs.map(\.0), words: pairs.map(\.1), cons: pairs.map { Self.consonants($0.0) },
+                      autocorrect: autocorrect)
     lock.lock(); index = built; lock.unlock()
   }
 
@@ -66,21 +68,45 @@ final class Lexicon {
     lock.lock(); let idx = index; lock.unlock()
     if let w = learned[roman] { add(w) }
     if let r = idx.autocorrect[roman] { add(Phonetic.transliterate(r)) }
-    add(phonetic)
 
     let key = Self.skeleton(phonetic)
-    guard !key.isEmpty else { return Array(out.prefix(limit)) }
+    guard !key.isEmpty else { add(phonetic); return Array(out.prefix(limit)) }
     var i = Self.lowerBound(key, in: idx.keys)
 
     // Closest spelling first; on a tie prefer words that start like the input (ভালো over ওভাল for "bhalo").
     let first = phonetic.unicodeScalars.first
-    var exact: [(Int, String)] = []
+    var exact: [(score: Int, word: String)] = []
     while i < idx.keys.count, idx.keys[i] == key {
       let w = idx.words[i]
       exact.append((2 * Self.distance(phonetic, w) + (w.unicodeScalars.first == first ? 0 : 1), w)); i += 1
     }
-    exact.sort { $0.0 < $1.0 }
-    exact.forEach { add($0.1) }
+    exact.sort { $0.score < $1.score }
+
+    // Fuzzy matches (English-style spelling, extra vowels): vowels are noise, so compare consonants only,
+    // allowing 0-2 edits. ponytail: linear scan (~10 ms on 160k words), index it if it lags.
+    let q = Self.consonants(key), maxD = q.count < 4 ? 0 : q.count < 6 ? 1 : 2
+    var row = [Int](repeating: 0, count: q.count + 1)
+    var near: [(cons: Int, skel: Int, word: String)] = []
+    if exact.isEmpty || out.count + exact.count < limit {
+      for (n, c) in idx.cons.enumerated() where abs(c.count - q.count) <= maxD {
+        let d = Self.edits(q, c, &row)
+        if d <= maxD { near.append((d, Self.edits(key, idx.keys[n], &row), idx.words[n])) }
+      }
+      near.sort { $0.cons != $1.cons ? $0.cons < $1.cons : $0.skel < $1.skel }
+    }
+
+    // The dictionary beats the literal result when it is the same word with a confusable letter or vowel
+    // (গ্রিশ্মকাল -> গ্রীষ্মকাল: same sound class) or one stray vowel off (সারকার -> সরকার). Names the
+    // dictionary lacks keep the literal first (mahfuz).
+    if let b = exact.first {
+      add(b.word)
+    } else if let b = near.filter({ $0.cons == 0 })
+      .map({ (Self.distance(phonetic, $0.word), $0.word) }).min(by: { $0.0 < $1.0 }),
+      b.0 * 5 <= phonetic.unicodeScalars.count {
+      add(b.1)
+    }
+    add(phonetic)
+    exact.forEach { add($0.word) }
 
     // Completions: longer words that start with what was typed. Scan is capped, so short input gives few.
     if key.count >= 2 {
@@ -92,6 +118,7 @@ final class Lexicon {
       longer.sort { $0.0 != $1.0 ? $0.0 < $1.0 : Self.distance(phonetic, $0.1) < Self.distance(phonetic, $1.1) }
       longer.forEach { add($0.1) }
     }
+    if maxD > 0 { near.forEach { add($0.word) } }
     return Array(out.prefix(limit))
   }
 
@@ -136,6 +163,25 @@ final class Lexicon {
       prev = u.value
     }
     return out
+  }
+
+  /// `skeleton` minus vowels.
+  static func consonants(_ key: [UInt8]) -> [UInt8] { key.filter { !"aiuReEW".utf8.contains($0) } }
+
+  /// Levenshtein distance over small byte arrays; `row` is scratch space, at least `a.count + 1` long.
+  private static func edits(_ a: [UInt8], _ b: [UInt8], _ row: inout [Int]) -> Int {
+    if row.count < a.count + 1 { row = [Int](repeating: 0, count: a.count + 1) }
+    for j in 0...a.count { row[j] = j }
+    for (i, y) in b.enumerated() {
+      var diag = row[0]
+      row[0] = i + 1
+      for (j, x) in a.enumerated() {
+        let up = row[j + 1]
+        row[j + 1] = min(up + 1, row[j] + 1, diag + (x == y ? 0 : 1))
+        diag = up
+      }
+    }
+    return row[a.count]
   }
 
   private static func lowerBound(_ target: [UInt8], in keys: [[UInt8]]) -> Int {

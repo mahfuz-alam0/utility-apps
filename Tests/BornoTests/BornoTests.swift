@@ -36,6 +36,13 @@ private func realLexicon(learnedURL: URL? = nil) throws -> Lexicon {
   #expect(lex.suggest("bhalob", limit: 50).contains("ভালোবাসা"))   // completion while still typing
 }
 
+@Test func closeDictionaryWordBeatsSlippedLiteral() throws {
+  let lex = try realLexicon()
+  #expect(lex.suggest("grishmokal").first == "গ্রীষ্মকাল")        // literal গ্রিশ্মকাল is a slip
+  #expect(lex.suggest("rafi").first == "রাফি")                    // short: literal stays first
+  #expect(lex.suggest("suggestion").contains("সাজেশন"))           // English spelling, consonant-fuzzy hit
+}
+
 @Test func autocorrectAndLearning() throws {
   let lex = Lexicon()
   lex.load(words: [], autocorrect: ["academy": "oZakaDemi"])
