@@ -9,7 +9,6 @@ final class InputController: IMKInputController {
   private var buffer = ""            // roman text of the current word
   private var candidates: [String] = []
   private var selected = 0
-  private var picked = false         // user moved off the default candidate (so we learn the choice)
 
   override func recognizedEvents(_ sender: Any!) -> Int { Int(NSEvent.EventTypeMask.keyDown.rawValue) }
 
@@ -68,7 +67,6 @@ final class InputController: IMKInputController {
     let (core, _) = split
     candidates = core.isEmpty ? [""] : Lexicon.shared.suggest(core)
     selected = 0
-    picked = false
     render()
   }
 
@@ -82,20 +80,19 @@ final class InputController: IMKInputController {
     var caret = NSRect.zero
     _ = client()?.attributes(forCharacterIndex: 0, lineHeightRectangle: &caret)
     let panel = CandidatePanel.shared
-    panel.onPick = { [weak self] i in self?.selected = i; self?.picked = true; self?.commit() }
+    panel.onPick = { [weak self] i in self?.selected = i; self?.commit() }
     panel.show(header: buffer, items: candidates.map { $0 + tail }, selected: selected, caret: caret)
   }
 
   private func move(_ delta: Int) {
     selected = (selected + delta + candidates.count) % candidates.count
-    picked = true
     render()
   }
 
   private func commit(_ suffix: String = "") {
     guard !buffer.isEmpty else { return }
     let (core, tail) = split
-    if picked, !core.isEmpty { Lexicon.shared.learn(core, candidates[selected]) }
+    if !core.isEmpty, candidates.count > 1 { Lexicon.shared.learn(core, candidates[selected]) }
     client()?.insertText(candidates[selected] + tail + suffix, replacementRange: notFound)
     reset()
   }
@@ -106,7 +103,7 @@ final class InputController: IMKInputController {
   }
 
   private func reset() {
-    buffer = ""; candidates = []; selected = 0; picked = false
+    buffer = ""; candidates = []; selected = 0
     CandidatePanel.shared.hide()
   }
 }

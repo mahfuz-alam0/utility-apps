@@ -16,13 +16,15 @@ final class Lexicon {
 
   private let lock = NSLock()
   private var index = Index()
-  private var learned: [String: String]  // roman -> word the user picked last time
+  private var counts: [String: [String: Int]]  // roman -> word -> times the user committed it
   private let learnedURL: URL?
 
   init(learnedURL: URL? = nil) {
     self.learnedURL = learnedURL
-    learned = learnedURL.flatMap { try? Data(contentsOf: $0) }
-      .flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+    let data = learnedURL.flatMap { try? Data(contentsOf: $0) }
+    counts = data.flatMap { try? JSONDecoder().decode([String: [String: Int]].self, from: $0) }
+      ?? data.flatMap { try? JSONDecoder().decode([String: String].self, from: $0) }?.mapValues { [$0: 1] }  // old format
+      ?? [:]
   }
 
   // MARK: loading
@@ -59,14 +61,24 @@ final class Lexicon {
   // MARK: suggestions
 
   /// Ranked candidates for the roman text typed so far. Never empty for non-empty input.
-  /// Order: learned pick, autocorrect, literal phonetic result, dictionary matches, dictionary completions.
+  /// Words you committed before come first, most-committed first; the rest keep the order from `base`.
   func suggest(_ roman: String, limit: Int = 9) -> [String] {
+    var out = base(roman, limit: limit)
+    let seen = counts[roman] ?? [:]
+    for w in seen.keys.sorted() where !out.contains(w) { out.append(w) }
+    return out.enumerated().sorted {
+      let a = seen[$0.element] ?? 0, b = seen[$1.element] ?? 0
+      return a != b ? a > b : $0.offset < $1.offset
+    }.prefix(limit).map(\.element)
+  }
+
+  /// Order: autocorrect, literal phonetic result, dictionary matches, dictionary completions.
+  private func base(_ roman: String, limit: Int) -> [String] {
     let phonetic = Phonetic.transliterate(roman)
     var out: [String] = []
     func add(_ w: String) { if !w.isEmpty, !out.contains(w) { out.append(w) } }
 
     lock.lock(); let idx = index; lock.unlock()
-    if let w = learned[roman] { add(w) }
     if let r = idx.autocorrect[roman] { add(Phonetic.transliterate(r)) }
 
     let key = Self.skeleton(phonetic)
@@ -131,11 +143,12 @@ final class Lexicon {
     return Array(out.prefix(limit))
   }
 
-  /// Remember that `word` was chosen for `roman`; it becomes the first suggestion next time.
+  /// Count one commit of `word` for `roman`. Call on every commit, default pick included, so a word you keep
+  /// choosing climbs past the default only once it has been chosen more often.
+  /// ponytail: rewrites the whole file per commit, no decay; debounce the write / halve counts if it grows large.
   func learn(_ roman: String, _ word: String) {
-    guard learned[roman] != word else { return }
-    learned[roman] = word
-    guard let url = learnedURL, let data = try? JSONEncoder().encode(learned) else { return }
+    counts[roman, default: [:]][word, default: 0] += 1
+    guard let url = learnedURL, let data = try? JSONEncoder().encode(counts) else { return }
     try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try? data.write(to: url, options: .atomic)
   }

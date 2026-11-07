@@ -54,7 +54,11 @@ private func realLexicon(learnedURL: URL? = nil) throws -> Lexicon {
   let file = FileManager.default.temporaryDirectory.appendingPathComponent("borno-\(UUID().uuidString).json")
   defer { try? FileManager.default.removeItem(at: file) }
   let a = try realLexicon(learnedURL: file)
+  let first = a.suggest("bhalo")[0]
+  a.learn("bhalo", first); a.learn("bhalo", first)
   a.learn("bhalo", "ভালো")
-  #expect(a.suggest("bhalo").first == "ভালো")
+  #expect(a.suggest("bhalo").first == first)             // 1 pick does not beat 2 defaults
+  a.learn("bhalo", "ভালো"); a.learn("bhalo", "ভালো")
+  #expect(a.suggest("bhalo").first == "ভালো")            // 3 picks do
   #expect(Lexicon(learnedURL: file).suggest("bhalo").first == "ভালো")  // survives restart
 }

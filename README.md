@@ -192,7 +192,7 @@ Rules are Avro's: `o a i I u U e O OI OU rri`, conjuncts form automatically (`kk
 | [CandidatePanel.swift](Sources/Borno/CandidatePanel.swift) | Non-activating blurred panel, light/dark, placed under the caret (flips above at the screen edge) |
 | [main.swift](Sources/Borno/main.swift) | `IMKServer`; `--register` enables the input source |
 
-Candidate order: your last pick for that spelling, Avro autocorrect, the literal phonetic result, dictionary words with the same key (closest spelling first), then longer words that start the same. So `bhalo` shows ভাল, ভালো, … and once you pick ভালো it comes first next time (`~/Library/Application Support/Borno/learned.json`).
+Candidate order: words you committed for that spelling (most-committed first), Avro autocorrect, the literal phonetic result, dictionary words with the same key (closest spelling first), then longer words that start the same. So `bhalo` shows ভাল, ভালো, … and every commit counts, so once you pick ভালো more often than ভাল it comes first (`~/Library/Application Support/Borno/learned.json`).
 
 Data: [Resources/borno/words.txt](Resources/borno/words.txt) and `autocorrect.txt` come from the Avro Keyboard 5.6.0 installer (OmicronLab, MPL 1.1) via [make-dictionary.py](Scripts/borno/make-dictionary.py). [makeicon.swift](Scripts/borno/makeicon.swift) draws the icons.
 
