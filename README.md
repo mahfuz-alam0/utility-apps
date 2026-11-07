@@ -153,3 +153,50 @@ System-wide ad/tracker blocker for macOS: a local filtering DNS service plus a m
 - The same binary is the CLI: `Adwall serve | install | uninstall`; no argument starts the menu-bar app.
 - Blocklists: HaGeZi Pro + StevenBlack, refreshed every 24 h (`config.json` in the support folder also sets upstreams, default DoH to 1.1.1.1 / 9.9.9.9). Menu: pause/resume, recently blocked (click to allow), Edit Allowlist / Custom Blocklist (`rules/*.txt`, picked up within 2 s).
 - Not verified here: turning protection on (needs the admin prompt and changes system DNS).
+
+# Borno
+
+Bangla typing on any Mac keyboard, modeled on Avro Keyboard's Avro Phonetic. A real macOS input method (InputMethodKit), so it works in every app. Swift, AppKit, no dependencies.
+
+Type `ami tomake bhalobashi`, get `আমি তোমাকে ভালোবাসি`. The word so far shows inline (underlined) and in a candidate list under the caret.
+
+## Install
+
+```
+./bundle.sh borno install     # builds .build/Borno.app, copies to ~/Library/Input Methods, registers it
+```
+
+Then System Settings → Keyboard → Text Input → Input Sources → + → Bangla → Borno. Switch with the menu-bar input menu or Ctrl+Space. Log out and in once if it is not listed. `./bundle.sh borno` builds without installing.
+
+## Keys
+
+| Key | Action |
+|---|---|
+| letters, digits | build the word (digits become ০-৯, `.` becomes ।, `$` becomes ৳) |
+| ↓ ↑ / Tab, ⇧Tab | choose a candidate |
+| Space, Return | commit the highlighted candidate (Space adds a space) |
+| Esc / Delete | cancel / erase one letter |
+| click | commit that candidate |
+| other punctuation, arrows, ⌘⌃⌥ shortcuts | commit the word, key goes through |
+
+Rules are Avro's: `o a i I u U e O OI OU rri`, conjuncts form automatically (`kkh` → ক্ষ), the backtick separates letters (``ek`i`` → একই, ``am`ra`` → আমরা), `y Z w r` after a consonant make ফলা, `rr` before a consonant makes reph, `ng ^ :` give ং ঁ ঃ, `t` plus two backticks gives ৎ, `,,` is hasanta.
+
+## Architecture
+
+| File | Role |
+|---|---|
+| [Phonetic.swift](Sources/Borno/Phonetic.swift) | Roman → Bangla. Longest-match tokens plus a small context state (after consonant / vowel / inherent o) |
+| [Lexicon.swift](Sources/Borno/Lexicon.swift) | 159k-word dictionary indexed by a loose phonetic key (o-vowel, hasanta, ন/ণ, স/শ/ষ, ত/ট, ড়/র… merged). Binary search: ~0.3 ms per key. Also autocorrect and learned picks |
+| [InputController.swift](Sources/Borno/InputController.swift) | `IMKInputController`: key handling, marked text, commit |
+| [CandidatePanel.swift](Sources/Borno/CandidatePanel.swift) | Non-activating blurred panel, light/dark, placed under the caret (flips above at the screen edge) |
+| [main.swift](Sources/Borno/main.swift) | `IMKServer`; `--register` enables the input source |
+
+Candidate order: your last pick for that spelling, Avro autocorrect, the literal phonetic result, dictionary words with the same key (closest spelling first), then longer words that start the same. So `bhalo` shows ভাল, ভালো, … and once you pick ভালো it comes first next time (`~/Library/Application Support/Borno/learned.json`).
+
+Data: [Resources/borno/words.txt](Resources/borno/words.txt) and `autocorrect.txt` come from the Avro Keyboard 5.6.0 installer (OmicronLab, MPL 1.1) via [make-dictionary.py](Scripts/borno/make-dictionary.py). [makeicon.swift](Scripts/borno/makeicon.swift) draws the icons.
+
+## Borno limitations
+
+- Apps that report no caret position get the list near the mouse.
+- No settings window, no fixed (non-phonetic) layouts, no user dictionary editor.
+- Conjuncts follow Avro's table only (`kn` stays ক + ন).
