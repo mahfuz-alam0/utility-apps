@@ -1,0 +1,16 @@
+name: Feature or new app idea
+description: Suggest a feature, or a new small utility to add
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What do you want, and why?
+      description: For a new app, say what it does and why it fits "small, offline, native, no dependencies".
+    validations: { required: true }
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help build it?
+      options:
+        - label: I would like to work on this

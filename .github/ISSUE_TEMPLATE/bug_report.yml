@@ -1,0 +1,21 @@
+name: Bug report
+description: Something is broken
+labels: [bug]
+body:
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      options: [Clipboard Manager, Prompter, Adwall, Borno, Toolkit, Build / CI]
+    validations: { required: true }
+  - type: input
+    id: env
+    attributes:
+      label: macOS version and Mac (Apple silicon / Intel)
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Steps to reproduce. Screenshots or logs help.
+    validations: { required: true }
