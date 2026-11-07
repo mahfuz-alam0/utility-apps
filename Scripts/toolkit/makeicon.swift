@@ -1,5 +1,5 @@
 // Draws the Toolkit icon as an .iconset folder: swiftc makeicon.swift -o makeicon && ./makeicon AppIcon.iconset
-// A 2x2 grid of the four apps' own marks (clipboard, prompter bars, shield, Bangla অ) on a light squircle.
+// A multi-tool opened from one handle: file, ring wrench, knife, screwdriver, on a deep indigo squircle.
 import AppKit
 
 let out = CommandLine.arguments[1]
@@ -8,61 +8,35 @@ try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectorie
 func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> NSColor {
     NSColor(srgbRed: CGFloat(hex >> 16 & 255) / 255, green: CGFloat(hex >> 8 & 255) / 255, blue: CGFloat(hex & 255) / 255, alpha: a)
 }
-func round(_ r: NSRect, _ k: CGFloat) -> NSBezierPath { NSBezierPath(roundedRect: r, xRadius: r.height * k, yRadius: r.height * k) }
-func gradient(_ top: UInt32, _ bottom: UInt32, in path: NSBezierPath) { NSGradient(starting: rgb(top), ending: rgb(bottom))!.draw(in: path, angle: -90) }
+let bgTop: UInt32 = 0x2C3480, bgBottom: UInt32 = 0x0B0D24
 
-/// One app tile at `r`; (u, v) are 0...1 inside it, v up.
-func tile(_ r: NSRect, _ app: Int) {
-    let t = r.width
-    func p(_ u: CGFloat, _ v: CGFloat) -> NSPoint { NSPoint(x: r.minX + u * t, y: r.minY + v * t) }
-    func box(_ u: CGFloat, _ v: CGFloat, _ w: CGFloat, _ h: CGFloat) -> NSRect { NSRect(x: r.minX + u * t, y: r.minY + v * t, width: w * t, height: h * t) }
+/// A tool lies along +x from the pivot (0,0). Coordinates are fractions of the canvas.
+func poly(_ pts: [(CGFloat, CGFloat)]) -> NSBezierPath {
+    let p = NSBezierPath()
+    p.move(to: NSPoint(x: pts[0].0, y: pts[0].1))
+    pts.dropFirst().forEach { p.line(to: NSPoint(x: $0.0, y: $0.1)) }
+    p.close()
+    return p
+}
+func bar(_ x0: CGFloat, _ x1: CGFloat, _ h: CGFloat) -> NSBezierPath {
+    NSBezierPath(roundedRect: NSRect(x: x0, y: -h / 2, width: x1 - x0, height: h), xRadius: h / 2, yRadius: h / 2)
+}
 
-    NSGraphicsContext.saveGraphicsState()
-    let shadow = NSShadow()
-    shadow.shadowColor = NSColor.black.withAlphaComponent(0.22)
-    shadow.shadowOffset = NSSize(width: 0, height: -t * 0.03)
-    shadow.shadowBlurRadius = t * 0.07
-    shadow.set()
-    let body = round(r, 0.24)
-    switch app {
-    case 0: rgb(0x2F83E8).setFill()
-    case 1: rgb(0x080C12).setFill()
-    case 2: rgb(0x1A7AF5).setFill()
-    default: rgb(0x006B50).setFill()
-    }
-    body.fill()
-    NSGraphicsContext.restoreGraphicsState()
-    switch app {
-    case 0: gradient(0x58AAFF, 0x1560D8, in: body)
-    case 3: gradient(0x007A5C, 0x004D3A, in: body)
-    default: break
-    }
+enum Tool { case screwdriver, knife, wrench, file }
 
-    switch app {
-    case 0:  // clipboard: white board, dark clip, three blue lines
-        rgb(0xFFFFFF, 0.38).setFill(); round(box(0.34, 0.14, 0.44, 0.62), 0.1).fill()
-        NSColor.white.setFill(); round(box(0.24, 0.2, 0.46, 0.6), 0.1).fill()
-        rgb(0x153C78).setFill(); round(box(0.37, 0.74, 0.2, 0.12), 0.35).fill()
-        rgb(0x2F7FE0).setFill()
-        for (v, w) in [(0.6, 0.3), (0.48, 0.3), (0.36, 0.2)] as [(CGFloat, CGFloat)] { round(box(0.32, v, w, 0.05), 0.5).fill() }
-    case 1:  // prompter: one yellow bar, three white bars
-        for (v, w, c) in [(0.72, 0.4, rgb(0xFFCF5C)), (0.54, 0.54, .white), (0.40, 0.46, .white), (0.26, 0.34, .white)] as [(CGFloat, CGFloat, NSColor)] {
-            c.setFill(); round(box(0.22, v, w, 0.075), 0.5).fill()
-        }
-    case 2:  // adwall: white shield, blue check
-        let shield = NSBezierPath()
-        shield.move(to: p(0.5, 0.86)); shield.line(to: p(0.8, 0.75)); shield.line(to: p(0.8, 0.46))
-        shield.line(to: p(0.5, 0.16)); shield.line(to: p(0.2, 0.46)); shield.line(to: p(0.2, 0.75)); shield.close()
-        NSColor.white.setFill(); shield.fill()
-        let tick = NSBezierPath()
-        tick.move(to: p(0.34, 0.47)); tick.line(to: p(0.45, 0.36)); tick.line(to: p(0.67, 0.65))
-        tick.lineWidth = t * 0.085; tick.lineCapStyle = .round; tick.lineJoinStyle = .round
-        rgb(0x1A7AF5).setStroke(); tick.stroke()
-    default:  // borno: Bangla অ
-        let font = NSFont(name: "Kohinoor Bangla Semibold", size: t * 0.7) ?? NSFont.boldSystemFont(ofSize: t * 0.7)
-        let str = NSAttributedString(string: "অ", attributes: [.font: font, .foregroundColor: NSColor.white])
-        let b = str.size()
-        str.draw(at: NSPoint(x: r.midX - b.width / 2, y: r.midY - b.height / 2 - t * 0.04))
+func shape(_ tool: Tool, _ L: CGFloat) -> [NSBezierPath] {
+    switch tool {
+    case .screwdriver:  // thin shaft, flat tip
+        return [poly([(0, -0.022), (L - 0.09, -0.022), (L - 0.09, -0.05), (L, -0.05), (L, 0.05), (L - 0.09, 0.05), (L - 0.09, 0.022), (0, 0.022)])]
+    case .knife:  // straight spine, curved-in edge, pointed tip
+        return [poly([(0, -0.05), (L - 0.26, -0.05), (L, 0.05), (0, 0.05)])]
+    case .wrench:  // shaft ending in a ring
+        let ring = NSBezierPath(ovalIn: NSRect(x: L - 0.11, y: -0.11, width: 0.22, height: 0.22))
+        ring.append(NSBezierPath(ovalIn: NSRect(x: L - 0.045, y: -0.045, width: 0.09, height: 0.09)))
+        ring.windingRule = .evenOdd
+        return [bar(0, L - 0.08, 0.075), ring]
+    case .file:  // plain bar with a rounded end
+        return [bar(0, L, 0.095)]
     }
 }
 
@@ -71,16 +45,39 @@ func icon(_ px: Int) -> Data {
                                hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
     let s = CGFloat(px)
-    let bodyRect = NSRect(x: s * 0.05, y: s * 0.05, width: s * 0.9, height: s * 0.9)
-    let body = NSBezierPath(roundedRect: bodyRect, xRadius: s * 0.2, yRadius: s * 0.2)
-    gradient(0xFAFBFD, 0xCBD2DD, in: body)
-    rgb(0xFFFFFF, 0.7).setStroke(); body.lineWidth = max(1, s * 0.004); body.stroke()
+    let body = NSBezierPath(roundedRect: NSRect(x: s * 0.05, y: s * 0.05, width: s * 0.9, height: s * 0.9), xRadius: s * 0.2, yRadius: s * 0.2)
+    NSGradient(starting: rgb(bgTop), ending: rgb(bgBottom))!.draw(in: body, angle: -90)
 
-    let pad = s * 0.095, gap = s * 0.05, t = (bodyRect.width - 2 * pad - gap) / 2
-    for app in 0..<4 {
-        let col = CGFloat(app % 2), row = CGFloat(1 - app / 2)  // clipboard, prompter on top; adwall, borno below
-        tile(NSRect(x: bodyRect.minX + pad + col * (t + gap), y: bodyRect.minY + pad + row * (t + gap), width: t, height: t), app)
+    let pivot = NSPoint(x: s * 0.385, y: s * 0.365)
+    func place(_ part: NSBezierPath, angle: CGFloat) {
+        var t = AffineTransform(translationByX: pivot.x, byY: pivot.y)
+        t.rotate(byDegrees: angle)
+        t.scale(s)
+        part.transform(using: t)
     }
+    // back to front: file, wrench, knife, screwdriver; each leaves a thin gap where it overlaps the one behind
+    let tools: [(Tool, CGFloat, CGFloat, UInt32)] = [
+        (.file, 0, 0.47, 0xFF6B6B), (.wrench, 28, 0.45, 0x3DD68C), (.knife, 56, 0.53, 0x4DA3FF), (.screwdriver, 84, 0.52, 0xFFCF5C),
+    ]
+    for (tool, angle, L, color) in tools {
+        let parts = shape(tool, L)
+        for part in parts { place(part, angle: angle); part.lineJoinStyle = .round }
+        for part in parts { part.lineWidth = s * 0.034; rgb(bgBottom).setStroke(); part.stroke() }  // gap
+        for part in parts {
+            part.lineWidth = s * 0.016
+            rgb(color).setStroke(); rgb(color).setFill()
+            part.fill(); part.stroke()                                                               // rounded corners
+        }
+    }
+    // shared handle, pointing down-left from the pivot
+    let handle = bar(-0.085, 0.30, 0.17)
+    place(handle, angle: 225)
+    rgb(bgBottom).setStroke(); handle.lineWidth = s * 0.018; handle.stroke()
+    NSGradient(starting: rgb(0xFFFFFF), ending: rgb(0xC9D0E4))!.draw(in: handle, angle: 225)
+    // rivet
+    let r = s * 0.034
+    rgb(bgBottom).setFill()
+    NSBezierPath(ovalIn: NSRect(x: pivot.x - r, y: pivot.y - r, width: 2 * r, height: 2 * r)).fill()
     return rep.representation(using: .png, properties: [:])!
 }
 
