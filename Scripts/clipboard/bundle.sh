@@ -1,10 +1,13 @@
 #!/bin/sh
 # Notarize: SIGN_ID="Developer ID Application: Name (TEAMID)" NOTARY_PROFILE=<keychain profile> ./bundle.sh clipboard
 # Version: Scripts/clipboard/VERSION; build number = git commit count.
+#   ./bundle.sh clipboard app   .app only
 # Builds .build/ClipboardManager.app + build/ClipboardManager.dmg (menu-bar agent, no Dock icon). Does not launch or install.
 set -e
 cd "$(dirname "$0")/../.."
-swift build -c release --product ClipboardManager
+ARCHS="--arch arm64 --arch x86_64"
+swift build -c release $ARCHS --product ClipboardManager
+BIN=$(swift build -c release $ARCHS --show-bin-path)
 [ -f Resources/clipboard/AppIcon.icns ] && [ -f Resources/clipboard/dmg-background.png ] || swift Scripts/clipboard/make-assets.swift  # committed; delete to regenerate
 VERSION=$(tr -d '[:space:]' < Scripts/clipboard/VERSION)
 BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)
@@ -12,7 +15,7 @@ if [ -n "$NOTARY_PROFILE" ] && [ -z "$SIGN_ID" ]; then echo "NOTARY_PROFILE need
 APP=.build/ClipboardManager.app  # not in build/, so build/ holds only the .dmg
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/release/ClipboardManager "$APP/Contents/MacOS/"
+cp "$BIN/ClipboardManager" "$APP/Contents/MacOS/"
 cp Resources/clipboard/AppIcon.icns Resources/clipboard/NOTICE.txt "$APP/Contents/Resources/"
 cp LICENSE "$APP/Contents/Resources/LICENSE.txt"
 cat > "$APP/Contents/Info.plist" <<EOF
@@ -39,6 +42,7 @@ if [ -n "$SIGN_ID" ]; then codesign --force --options runtime --timestamp -s "$S
 else codesign --force --sign - -r='designated => identifier "com.local.ClipboardManager"' "$APP"; fi
 Scripts/notarize.sh "$APP"
 echo "built $APP ($VERSION, build $BUILD)"
+[ "$1" = app ] && exit 0  # .app only (used by ./bundle.sh toolkit)
 
 Scripts/clipboard/make-dmg.sh "$APP"
 if [ -n "$SIGN_ID" ]; then codesign --force --timestamp -s "$SIGN_ID" build/ClipboardManager.dmg; fi

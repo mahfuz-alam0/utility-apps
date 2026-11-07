@@ -19,10 +19,12 @@ fi
 VERSION=$(tr -d '[:space:]' < Scripts/prompter/VERSION)
 BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)
 if [ -n "$NOTARY_PROFILE" ] && [ -z "$SIGN_ID" ]; then echo "NOTARY_PROFILE needs SIGN_ID (a Developer ID Application identity)" >&2; exit 1; fi
-swift build -c release --product Prompter
+ARCHS="--arch arm64 --arch x86_64"
+swift build -c release $ARCHS --product Prompter
+BIN=$(swift build -c release $ARCHS --show-bin-path)
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/release/Prompter "$APP/Contents/MacOS/"
+cp "$BIN/Prompter" "$APP/Contents/MacOS/"
 cp Resources/prompter/* "$APP/Contents/Resources/"
 cp LICENSE "$APP/Contents/Resources/LICENSE.txt"
 cat > "$APP/Contents/Info.plist" <<EOF
