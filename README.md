@@ -194,6 +194,8 @@ Rules are Avro's: `o a i I u U e O OI OU rri`, conjuncts form automatically (`kk
 
 Candidate order: words you committed for that spelling (most-committed first), Avro autocorrect, the literal phonetic result, dictionary words with the same key (closest spelling first), then longer words that start the same. So `bhalo` shows ভাল, ভালো, … and every commit counts, so once you pick ভালো more often than ভাল it comes first (`~/Library/Application Support/Borno/learned.json`).
 
+English words work too: `suggestion` → সাজেশন, `station` → স্টেশন, `teacher` → টিচার. If the plain phonetic result is not the start of any dictionary word, Borno respells the input the way English sounds (`tion`→শন, soft `g`/`c`, `ch`→চ, …) and looks that up. No translation (suggestion → পরামর্শ): that needs a multi-MB English–Bangla dictionary.
+
 Data: [Resources/borno/words.txt](Resources/borno/words.txt) and `autocorrect.txt` come from the Avro Keyboard 5.6.0 installer (OmicronLab, MPL 1.1) via [make-dictionary.py](Scripts/borno/make-dictionary.py). [makeicon.swift](Scripts/borno/makeicon.swift) draws the icons.
 
 ## Borno limitations

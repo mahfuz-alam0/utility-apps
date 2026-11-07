@@ -73,7 +73,7 @@ final class Lexicon {
   }
 
   /// Order: autocorrect, literal phonetic result, dictionary matches, dictionary completions.
-  private func base(_ roman: String, limit: Int) -> [String] {
+  private func base(_ roman: String, limit: Int, respelled: Bool = false) -> [String] {
     let phonetic = Phonetic.transliterate(roman)
     var out: [String] = []
     func add(_ w: String) { if !w.isEmpty, !out.contains(w) { out.append(w) } }
@@ -129,8 +129,10 @@ final class Lexicon {
     if !typing, let b = exact.first {
       add(b.word)
     } else if !typing, let b = near.filter({ $0.cons == 0 && $0.word.unicodeScalars.last == phonetic.unicodeScalars.last })  // same ending: একুশে is not একুশ
-      .map({ (Self.distance(phonetic, $0.word), $0.word) }).min(by: { $0.0 < $1.0 }), b.0 * 3 <= len {
+      .map({ (Self.distance(phonetic, $0.word), $0.word) }).min(by: { $0.0 < $1.0 }), respelled || b.0 * 3 <= len {
       add(b.1)
+    } else if !typing, !respelled, let w = englishFix(roman, limit: limit) {
+      add(w)
     }
     add(phonetic)
     // Words one letter off (ভাল -> ভালো) first, then real completions of what was typed (গ্রি -> গ্রিক গ্রিস),
@@ -142,6 +144,33 @@ final class Lexicon {
     if maxD > 0 { near.forEach { add($0.word) } }
     return Array(out.prefix(limit))
   }
+
+  /// Plain lowercase input that is not a dictionary prefix may be an English word ("suggestion"): respell it the
+  /// way it sounds ("sajeshon") and look that up. Returns a dictionary word only.
+  private func englishFix(_ roman: String, limit: Int) -> String? {
+    guard roman.allSatisfy({ $0.isASCII && $0.isLowercase }) else { return nil }
+    lock.lock(); let idx = index; lock.unlock()
+    func known(_ w: String) -> Bool {
+      let k = Self.skeleton(w)
+      var i = Self.lowerBound(k, in: idx.keys)
+      while i < idx.keys.count, idx.keys[i] == k { if idx.words[i] == w { return true }; i += 1 }
+      return false
+    }
+    // "-stion" is শ্চন in question but শন in suggestion, so try both.
+    for rules in [[("stion", "schon")] + Self.englishRules, Self.englishRules] {
+      let spoken = rules.reduce(roman) { $0.replacingOccurrences(of: $1.0, with: $1.1, options: .regularExpression) }
+      if spoken != roman, let w = base(spoken, limit: limit, respelled: true).first, known(w) { return w }
+    }
+    return nil
+  }
+
+  // Rough English spelling -> Avro roman, applied in order. ponytail: a handful of rules, not a pronouncing
+  // dictionary; add a rule when a common word still misses.
+  private static let englishRules = [
+    ("([^aeiou])\\1", "$1"), ("[ct]ial", "shal"), ("tch", "ch"), ("ck", "k"), ("c(?=[eiy])", "s"), ("c(?!h)", "k"), ("ch", "c"),
+    ("tion|sion|cian", "shon"), ("ture", "car"), ("qu", "ku"), ("g(?=[eiy])", "j"), ("ea", "i"),
+    ("([^aeiou])\\1", "$1"),
+  ]
 
   /// Count one commit of `word` for `roman`. Call on every commit, default pick included, so a word you keep
   /// choosing climbs past the default only once it has been chosen more often.

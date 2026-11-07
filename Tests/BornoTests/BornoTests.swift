@@ -46,6 +46,14 @@ private func realLexicon(learnedURL: URL? = nil) throws -> Lexicon {
   #expect(lex.suggest("suggestion").contains("সাজেশন"))           // English spelling, consonant-fuzzy hit
 }
 
+@Test func englishWordsGetBanglaSpelling() throws {
+  let lex = try realLexicon()
+  let cases = ["suggestion": "সাজেশন", "question": "কোশ্চেন", "station": "স্টেশন", "education": "এডুকেশন",
+               "teacher": "টিচার", "special": "স্পেশাল"]
+  for (roman, bangla) in cases { #expect(lex.suggest(roman).first == bangla, "\(roman)") }
+  #expect(lex.suggest("bhalo").first == "ভাল")   // Bangla spelling is not hijacked
+}
+
 @Test func autocorrectAndLearning() throws {
   let lex = Lexicon()
   lex.load(words: [], autocorrect: ["academy": "oZakaDemi"])
