@@ -218,6 +218,15 @@ Data: [Resources/borno/words.txt](Resources/borno/words.txt) and `autocorrect.tx
 - No settings window, no fixed (non-phonetic) layouts.
 - Conjuncts follow Avro's table only (`kn` stays ক + ন).
 
+# Toolkit
+
+One app that carries all four (Clipboard Manager, Prompter, Adwall, Borno) in `Contents/Helpers`. Its window lists them with **Open / Quit** buttons; Borno gets **Install**, which runs Borno's own installer into `~/Library/Input Methods` (macOS only loads input methods from there, so it cannot run from inside another app). Sources: [Sources/Toolkit/](Sources/Toolkit/).
+
+`./bundle.sh toolkit` builds `build/Toolkit.dmg` (universal, signed ad hoc; same `SIGN_ID` / `NOTARY_PROFILE` as the others, one notarization covers all four). `./bundle.sh toolkit app` builds the `.app` only. The standalone apps and their dmgs are unchanged; Toolkit embeds copies built from the same source.
+
+- Embedded apps keep their own bundle ids, so Toolkit and a standalone install of the same app are one app to macOS (same permissions, same data).
+- Adwall: protection installed from the embedded copy stops working if Toolkit is deleted.
+
 # License
 
 All apps here are open source under the [MIT License](LICENSE): use, copy, modify and redistribute freely, no warranty. Each built app carries `LICENSE.txt` and `NOTICE.txt` in its `Contents/Resources`.
@@ -229,5 +238,6 @@ Third-party material, all credited in the app's `NOTICE.txt`:
 | Borno | `words.txt`, `autocorrect.txt` derived from Avro Keyboard (OmicronLab) | MPL 1.1 (those two files only) |
 | Adwall | HaGeZi and StevenBlack blocklists, downloaded at runtime, not bundled | GPL-3.0 / MIT, theirs |
 | Clipboard Manager, Prompter | nothing | |
+| Toolkit | the four apps above, with their notices | as above |
 
 Releases: set `SIGN_ID` and `NOTARY_PROFILE` (see each `Scripts/<app>/bundle.sh`) so macOS opens them without the unidentified-developer warning. Versions live in `Scripts/<app>/VERSION`.

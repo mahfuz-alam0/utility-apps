@@ -17,3 +17,5 @@ jobs:
         run: ./bundle.sh adwall app
       - name: Prompter app builds
         run: ./bundle.sh prompter app
+      - name: Toolkit (unified app) builds
+        run: ./bundle.sh toolkit app

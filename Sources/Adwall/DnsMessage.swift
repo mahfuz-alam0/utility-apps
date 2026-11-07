@@ -122,16 +122,32 @@ struct DnsQuery {
   }
 }
 
+/// Empty EDNS0 OPT record. Built in steps: one long `+` chain of [UInt8] makes older Swift compilers (CI) give up.
+private func optRecord(udpSize: Int) -> Packet {
+  var r: Packet = [0]
+  r += put16(typeOPT)
+  r += put16(udpSize)
+  r += put32(0)
+  r += put16(0)
+  return r
+}
+
 private func replyFlags(_ q: DnsQuery, rcode: Int) -> Int { flagQR | (q.flags & flagRD) | flagRA | rcode }
 
 /// NXDOMAIN with a short-lived SOA so clients cache the block.
 func negativeResponse(_ q: DnsQuery, ttl: Int = 120) -> Packet {
   var out = header(id: q.id, flags: replyFlags(q, rcode: rcodeNXDomain), questions: 1, authorities: 1, additionals: q.udpSize == nil ? 0 : 1)
   out += q.question
-  let rdata = encodeName("adwall.local") + encodeName("hostmaster.adwall.local")
-    + put32(1) + put32(3600) + put32(600) + put32(86400) + put32(ttl)
-  out += [0xC0, 0x0C] + put16(typeSOA) + put16(1) + put32(ttl) + put16(rdata.count) + rdata
-  if q.udpSize != nil { out += [0] + put16(typeOPT) + put16(1232) + put32(0) + put16(0) }
+  var rdata = encodeName("adwall.local")
+  rdata += encodeName("hostmaster.adwall.local")
+  for v in [1, 3600, 600, 86400, ttl] { rdata += put32(v) }
+  out += [0xC0, 0x0C]
+  out += put16(typeSOA)
+  out += put16(1)
+  out += put32(ttl)
+  out += put16(rdata.count)
+  out += rdata
+  if q.udpSize != nil { out += optRecord(udpSize: 1232) }
   return out
 }
 
@@ -142,7 +158,7 @@ func servfailResponse(_ q: DnsQuery) -> Packet {
 func buildQuery(_ name: String, type: Int = 1, id: Int = 7, edns: Bool = true) -> Packet {
   var out = header(id: id, flags: flagRD, questions: 1, authorities: 0, additionals: edns ? 1 : 0)
   out += encodeName(name) + put16(type) + put16(1)
-  if edns { out += [0] + put16(typeOPT) + put16(4096) + put32(0) + put16(0) }
+  if edns { out += optRecord(udpSize: 4096) }
   return out
 }
 

@@ -28,14 +28,25 @@ final class Delegate: NSObject, NSApplicationDelegate {
   }
 }
 
+/// Polls which apps are running. An ObservableObject, not @State: the @State macro plugin is missing from
+/// Command Line Tools-only toolchains, which breaks universal builds.
+final class Running: ObservableObject {
+  @Published var ids = Set<String>()
+  private var timer: Timer?
+  init() {
+    refresh()
+    timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.refresh() }
+  }
+  private func refresh() { ids = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)) }
+}
+
 struct ToolList: View {
-  @State private var running = Set<String>()
-  private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+  @StateObject private var running = Running()
 
   var body: some View {
     VStack(spacing: 0) {
       ForEach(tools) { tool in
-        let isRunning = running.contains(tool.bundleID) && !tool.isInputMethod
+        let isRunning = running.ids.contains(tool.bundleID) && !tool.isInputMethod
         HStack {
           VStack(alignment: .leading, spacing: 2) {
             Text(tool.name).font(.headline)
@@ -57,9 +68,5 @@ struct ToolList: View {
       }
     }
     .frame(width: 460)
-    .onAppear(perform: refresh)
-    .onReceive(tick) { _ in refresh() }
   }
-
-  private func refresh() { running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)) }
 }
