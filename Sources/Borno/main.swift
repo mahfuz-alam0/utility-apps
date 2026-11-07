@@ -57,4 +57,7 @@ let server = IMKServer(
   name: Bundle.main.infoDictionary?["InputMethodConnectionName"] as? String,
   bundleIdentifier: Bundle.main.bundleIdentifier)
 Lexicon.shared.loadBundled()
+NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
+  Lexicon.shared.flush()
+}
 NSApplication.shared.run()

@@ -9,12 +9,27 @@ final class InputController: IMKInputController {
   private var buffer = ""            // roman text of the current word
   private var candidates: [String] = []
   private var selected = 0
+  private static let digitKeys: [UInt16] = [18, 19, 20, 21, 23, 22, 26, 28, 25]   // key codes of 1...9
+
+  override func menu() -> NSMenu! { BornoMenu.shared.menu }
+
+  override func activateServer(_ sender: Any!) {
+    super.activateServer(sender)
+    Lexicon.shared.reloadIfUserWordsChanged()
+  }
 
   override func recognizedEvents(_ sender: Any!) -> Int { Int(NSEvent.EventTypeMask.keyDown.rawValue) }
 
   override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
     guard let event, event.type == .keyDown else { return false }
     let composing = !buffer.isEmpty
+
+    // ⌥1...⌥9 pick that candidate.
+    if composing, event.modifierFlags.intersection([.command, .control, .option]) == .option,
+      let n = Self.digitKeys.firstIndex(of: event.keyCode) {
+      if n < candidates.count { selected = n; commit() }
+      return true
+    }
 
     // Shortcuts (⌘ ⌃ ⌥) belong to the app: finish the word, let the key through.
     if !event.modifierFlags.intersection([.command, .control, .option]).isEmpty { commit(); return false }
@@ -52,6 +67,7 @@ final class InputController: IMKInputController {
 
   override func deactivateServer(_ sender: Any!) {
     commit()
+    Lexicon.shared.flush()
     super.deactivateServer(sender)
   }
 

@@ -4,6 +4,9 @@
 #   ./bundle.sh borno           build .build/Borno.app + build/Borno.dmg (drag to Applications, open once)
 #   ./bundle.sh borno app       .app only
 #   ./bundle.sh borno install   .app, then copy to ~/Library/Input Methods and register (same as opening Borno once)
+# Notarize (needs a Developer ID SIGN_ID and a keychain profile from `xcrun notarytool store-credentials`):
+#   SIGN_ID="Developer ID Application: Name (TEAMID)" NOTARY_PROFILE=borno ./bundle.sh borno
+# Version comes from Scripts/borno/VERSION; the build number is the git commit count.
 # After install: System Settings > Keyboard > Text Input > Input Sources > + > Bangla > Borno, then switch to it
 # from the menu bar (or Ctrl+Space). If it does not show up, log out and in once.
 set -e
@@ -14,6 +17,9 @@ swift build -c release $ARCHS --product Borno
 BIN=$(swift build -c release $ARCHS --show-bin-path)
 
 ID=com.mahfuz.inputmethod.Borno
+VERSION=$(tr -d '[:space:]' < Scripts/borno/VERSION)
+BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)
+if [ -n "$NOTARY_PROFILE" ] && [ -z "$SIGN_ID" ]; then echo "NOTARY_PROFILE needs SIGN_ID (a Developer ID Application identity)" >&2; exit 1; fi
 APP=.build/Borno.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -33,8 +39,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>Borno</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$BUILD</string>
+  <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Mahfuz Alam</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
@@ -77,13 +84,26 @@ if [ -n "$SIGN_ID" ]; then TS=--timestamp; else TS=--timestamp=none; fi
 codesign --force --deep --options runtime $TS -s "${SIGN_ID:--}" "$APP"
 codesign --verify --deep --strict "$APP"
 echo "Borno: $(lipo -archs "$APP/Contents/MacOS/Borno")"
-echo "built $APP"
+
+# Apple scans the app, then the ticket is stapled so it also passes Gatekeeper offline.
+notarize() {
+  [ -n "$NOTARY_PROFILE" ] || return 0
+  SUBMIT=$1
+  if [ -d "$1" ]; then SUBMIT=build/notarize.zip; mkdir -p build; rm -f "$SUBMIT"; ditto -c -k --keepParent "$1" "$SUBMIT"; fi
+  xcrun notarytool submit "$SUBMIT" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$1"
+  [ "$SUBMIT" = "$1" ] || rm -f "$SUBMIT"
+}
+notarize "$APP"
+echo "built $APP ($VERSION, build $BUILD)"
 
 if [ "$1" != "app" ] && [ "$1" != "install" ]; then
   BG=$(mktemp -t borno-bg).png
   swift Scripts/prompter/makedmgbg.swift "$BG" Borno "Then open it once to add the keyboard"
   NAME=Borno BG="$BG" Scripts/clipboard/make-dmg.sh "$APP"
   rm -f "$BG"
+  if [ -n "$SIGN_ID" ]; then codesign --force --timestamp -s "$SIGN_ID" build/Borno.dmg; fi
+  notarize build/Borno.dmg
 fi
 
 if [ "$1" = "install" ]; then

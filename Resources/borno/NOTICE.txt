@@ -1,0 +1,14 @@
+Borno
+Copyright (c) 2026 Mahfuz Alam
+
+Dictionary and autocorrect data (words.txt, autocorrect.txt)
+------------------------------------------------------------
+Derived from Avro Keyboard 5.6.0, Copyright (c) OmicronLab (https://www.omicronlab.com),
+used under the Mozilla Public License 1.1: https://www.mozilla.org/MPL/1.1/
+
+These two files remain under the MPL 1.1. Their source form is the Avro Keyboard database they were
+extracted from, and the extraction script is in the Borno source repository:
+https://github.com/mahfuz-alam0/utility-apps (Scripts/borno/make-dictionary.py).
+The phonetic rules follow Avro Phonetic.
+
+Borno is not affiliated with or endorsed by OmicronLab.

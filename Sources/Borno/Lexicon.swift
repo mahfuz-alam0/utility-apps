@@ -1,11 +1,15 @@
 import Foundation
+import os
+
+private let log = Logger(subsystem: "com.mahfuz.inputmethod.Borno", category: "lexicon")
 
 /// Word suggestions. Dictionary words are indexed by a loose phonetic "skeleton" (see `skeleton`), so
 /// "tomake" finds তোমাকে and "bari" finds বাড়ি. Call from the main thread; `load` may run anywhere.
 final class Lexicon {
-  static let shared = Lexicon(learnedURL: FileManager.default
-    .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    .appendingPathComponent("Borno/learned.json"))
+  static let supportDir = FileManager.default
+    .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Borno")
+  static let userWordsURL = supportDir.appendingPathComponent("user-words.txt")
+  static let shared = Lexicon(learnedURL: supportDir.appendingPathComponent("learned.json"), userWordsURL: userWordsURL)
 
   private struct Index {
     var keys: [[UInt8]] = []         // sorted
@@ -18,9 +22,15 @@ final class Lexicon {
   private var index = Index()
   private var counts: [String: [String: Int]]  // roman -> word -> times the user committed it
   private let learnedURL: URL?
+  private let userWordsURL: URL?
+  private let maxLearned: Int
+  private let saveQueue = DispatchQueue(label: "borno.learned.save", qos: .utility)
+  private var pendingSave: DispatchWorkItem?
 
-  init(learnedURL: URL? = nil) {
+  init(learnedURL: URL? = nil, userWordsURL: URL? = nil, maxLearned: Int = 20_000) {
     self.learnedURL = learnedURL
+    self.userWordsURL = userWordsURL
+    self.maxLearned = maxLearned
     let data = learnedURL.flatMap { try? Data(contentsOf: $0) }
     counts = data.flatMap { try? JSONDecoder().decode([String: [String: Int]].self, from: $0) }
       ?? data.flatMap { try? JSONDecoder().decode([String: String].self, from: $0) }?.mapValues { [$0: 1] }  // old format
@@ -40,22 +50,51 @@ final class Lexicon {
     lock.lock(); index = built; lock.unlock()
   }
 
-  /// Reads words.txt / autocorrect.txt from the app bundle on a background queue.
+  /// Reads words.txt / autocorrect.txt from the app bundle and the user's custom words, on a background queue.
+  /// Call again to pick up edits to the custom words file.
   func loadBundled() {
-    DispatchQueue.global(qos: .utility).async { [self] in
-      guard let w = Bundle.main.url(forResource: "words", withExtension: "txt"),
-        let data = try? Data(contentsOf: w) else { return }
-      let words = data.split(separator: 10).map { String(decoding: $0, as: UTF8.self) }
-      var auto: [String: String] = [:]
-      if let a = Bundle.main.url(forResource: "autocorrect", withExtension: "txt"),
-        let text = try? String(contentsOf: a, encoding: .utf8) {
-        for line in text.split(separator: "\n") {
-          let kv = line.split(separator: "\t", maxSplits: 1)
-          if kv.count == 2 { auto[String(kv[0])] = String(kv[1]) }
-        }
-      }
-      load(words: words, autocorrect: auto)
+    userWordsStamp = userWordsModified
+    DispatchQueue.global(qos: .utility).async { [self] in loadResources() }
+  }
+
+  private var userWordsStamp: Date?
+  private var userWordsModified: Date? {
+    userWordsURL.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.modificationDate] as? Date }
+  }
+
+  /// Cheap; call whenever a text field gains focus so edits to the custom words file apply without a restart.
+  func reloadIfUserWordsChanged() {
+    if userWordsModified != userWordsStamp { loadBundled() }
+  }
+
+  func loadResources(from bundle: Bundle = .main) {
+    var words: [String] = []
+    if let w = bundle.url(forResource: "words", withExtension: "txt"), let data = try? Data(contentsOf: w) {
+      words = data.split(separator: 10).map { String(decoding: $0, as: UTF8.self) }
+    } else {
+      log.error("words.txt missing from the app bundle: no dictionary suggestions")
     }
+    var auto: [String: String] = [:]
+    if let a = bundle.url(forResource: "autocorrect", withExtension: "txt"),
+      let text = try? String(contentsOf: a, encoding: .utf8) {
+      for line in text.split(separator: "\n") {
+        let kv = line.split(separator: "\t", maxSplits: 1)
+        if kv.count == 2 { auto[String(kv[0])] = String(kv[1]) }
+      }
+    }
+    if let u = userWordsURL, let text = try? String(contentsOf: u, encoding: .utf8) {
+      let mine = Self.parseUserWords(text)
+      log.info("loaded \(mine.count) custom words")
+      words += mine
+    }
+    load(words: words, autocorrect: auto)
+  }
+
+  /// One word per line; blank lines and lines starting with # are ignored.
+  static func parseUserWords(_ text: String) -> [String] {
+    text.split(whereSeparator: \.isNewline)
+      .map { $0.trimmingCharacters(in: .whitespaces) }
+      .filter { !$0.isEmpty && !$0.hasPrefix("#") }
   }
 
   // MARK: suggestions
@@ -174,12 +213,49 @@ final class Lexicon {
 
   /// Count one commit of `word` for `roman`. Call on every commit, default pick included, so a word you keep
   /// choosing climbs past the default only once it has been chosen more often.
-  /// ponytail: rewrites the whole file per commit, no decay; debounce the write / halve counts if it grows large.
+  /// The file is written 1 s after the last commit, off the main thread. Past `maxLearned` spellings the
+  /// least-used 10% are dropped. ponytail: no decay; halve counts now and then if old picks should fade.
   func learn(_ roman: String, _ word: String) {
     counts[roman, default: [:]][word, default: 0] += 1
-    guard let url = learnedURL, let data = try? JSONEncoder().encode(counts) else { return }
-    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try? data.write(to: url, options: .atomic)
+    if counts.count > maxLearned {
+      let total = { (k: String) in self.counts[k]!.values.reduce(0, +) }
+      counts.keys.filter { $0 != roman }.sorted { total($0) < total($1) }
+        .prefix(counts.count - maxLearned * 9 / 10).forEach { counts[$0] = nil }
+    }
+    guard let url = learnedURL else { return }
+    pendingSave?.cancel()
+    let snapshot = counts
+    var item: DispatchWorkItem!
+    item = DispatchWorkItem { [weak self] in
+      Self.write(snapshot, to: url)
+      DispatchQueue.main.async { if self?.pendingSave === item { self?.pendingSave = nil } }   // flush() has nothing left
+    }
+    pendingSave = item
+    saveQueue.asyncAfter(deadline: .now() + 1, execute: item)
+  }
+
+  /// Writes a pending save now (call when the input method goes away).
+  func flush() {
+    guard let url = learnedURL, let item = pendingSave else { return }
+    item.cancel(); pendingSave = nil
+    let snapshot = counts
+    saveQueue.sync { Self.write(snapshot, to: url) }
+  }
+
+  /// Forgets every learned pick, in memory and on disk.
+  func clearLearned() {
+    pendingSave?.cancel(); pendingSave = nil
+    counts = [:]
+    if let url = learnedURL { saveQueue.sync { try? FileManager.default.removeItem(at: url) } }
+  }
+
+  private static func write(_ counts: [String: [String: Int]], to url: URL) {
+    do {
+      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try JSONEncoder().encode(counts).write(to: url, options: .atomic)
+    } catch {
+      log.error("could not save learned words: \(error.localizedDescription)")
+    }
   }
 
   // MARK: helpers

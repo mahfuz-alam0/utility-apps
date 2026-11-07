@@ -68,5 +68,48 @@ private func realLexicon(learnedURL: URL? = nil) throws -> Lexicon {
   #expect(a.suggest("bhalo").first == first)             // 1 pick does not beat 2 defaults
   a.learn("bhalo", "ভালো"); a.learn("bhalo", "ভালো")
   #expect(a.suggest("bhalo").first == "ভালো")            // 3 picks do
+  a.flush()
   #expect(Lexicon(learnedURL: file).suggest("bhalo").first == "ভালো")  // survives restart
+  a.clearLearned()
+  #expect(a.suggest("bhalo").first == "ভাল")
+  #expect(!FileManager.default.fileExists(atPath: file.path))
+}
+
+@Test func learnedFileIsCapped() {
+  let lex = Lexicon(maxLearned: 10)
+  lex.load(words: [])
+  for i in 0..<30 { lex.learn("w\(i)", "x\(i)") }
+  lex.learn("w0", "x0")                       // popular spelling survives, newest one is never dropped
+  lex.learn("fresh", "নতুন")
+  #expect(lex.suggest("fresh").first == "নতুন")
+  #expect(lex.suggest("w0").contains("x0"))
+  #expect((1..<30).filter { lex.suggest("w\($0)").contains("x\($0)") }.count < 10)   // the one-off picks were trimmed
+}
+
+@Test func customWordsJoinTheDictionary() throws {
+  #expect(Lexicon.parseUserWords("# note\n  তোমাকে \n\nরাফিয়া\r\n") == ["তোমাকে", "রাফিয়া"])
+  let file = FileManager.default.temporaryDirectory.appendingPathComponent("borno-\(UUID().uuidString).txt")
+  defer { try? FileManager.default.removeItem(at: file) }
+  try "# mine\nতোমাকে\n".write(to: file, atomically: true, encoding: .utf8)
+  let lex = Lexicon(userWordsURL: file)
+  lex.loadResources(from: Bundle(for: BundleToken.self))   // no words.txt here: only the custom words load
+  #expect(lex.suggest("tomake").first == "তোমাকে")       // loose spelling finds the custom word
+}
+
+private final class BundleToken {}
+
+@Test func commonWordsComeFirst() throws {
+  let lex = try realLexicon()
+  let cases = [
+    "ami": "আমি", "tumi": "তুমি", "se": "সে", "amra": "আমরা", "tomra": "তোমরা", "tara": "তারা", "keno": "কেন",
+    "kothay": "কোথায়", "kobe": "কবে", "kemon": "কেমন", "achi": "আছি", "ache": "আছে", "dhaka": "ঢাকা", "bhai": "ভাই",
+    "baba": "বাবা", "bondhu": "বন্ধু", "shikkha": "শিক্ষা", "bidyaloy": "বিদ্যালয়", "bangladesh": "বাংলাদেশ",
+    "desh": "দেশ", "manush": "মানুষ", "sundor": "সুন্দর", "dhonnyobad": "ধন্যবাদ", "nomoskar": "নমস্কার",
+    "kintu": "কিন্তু", "ebong": "এবং", "othoba": "অথবা", "karon": "কারণ", "jodi": "যদি", "tahole": "তাহলে",
+    "ekhon": "এখন", "tokhon": "তখন", "ajke": "আজকে", "kal": "কাল", "poroshu": "পরশু", "kolej": "কলেজ",
+    "shohor": "শহর", "gram": "গ্রাম", "akash": "আকাশ", "surjo": "সূর্য", "phul": "ফুল", "mach": "মাছ",
+    "bhat": "ভাত", "khabar": "খাবার", "korechi": "করেছি", "hoyeche": "হয়েছে", "pari": "পারি", "ghum": "ঘুম",
+    "kaj": "কাজ", "kotha": "কথা", "prem": "প্রেম", "shanti": "শান্তি", "shorkar": "সরকার", "korchi": "করছি",
+  ]
+  for (roman, bangla) in cases { #expect(lex.suggest(roman).first == bangla, "\(roman)") }
 }

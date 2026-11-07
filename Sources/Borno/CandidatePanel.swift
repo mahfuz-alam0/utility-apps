@@ -69,6 +69,7 @@ private final class ListView: NSView {
 
   private let headFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
   private let wordFont = NSFont.systemFont(ofSize: 15)
+  private let numFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
 
   override var isFlipped: Bool { true }
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -81,7 +82,7 @@ private final class ListView: NSView {
   var idealSize: NSSize {
     let words = items.map { ($0 as NSString).size(withAttributes: [.font: wordFont]).width }.max() ?? 0
     let head = (header as NSString).size(withAttributes: [.font: headFont]).width
-    let w = min(max(words + 2 * (Self.inset + 10), head + 24, 110), 420)
+    let w = min(max(words + 2 * (Self.inset + 10) + 24, head + 24, 110), 440)   // 24: room for the ⌥-number
     return NSSize(width: w, height: Self.headH + Self.inset + CGFloat(items.count) * Self.rowH + Self.inset)
   }
 
@@ -101,6 +102,12 @@ private final class ListView: NSView {
       let attrs: [NSAttributedString.Key: Any] = [.font: wordFont, .foregroundColor: on ? NSColor.white : NSColor.labelColor]
       let h = (word as NSString).size(withAttributes: attrs).height
       (word as NSString).draw(at: NSPoint(x: row.minX + 8, y: row.minY + (row.height - h) / 2), withAttributes: attrs)
+      if i < 9 {   // ⌥1-⌥9 picks this row
+        let n = "\(i + 1)" as NSString
+        let na: [NSAttributedString.Key: Any] = [.font: numFont, .foregroundColor: on ? NSColor.white.withAlphaComponent(0.75) : NSColor.tertiaryLabelColor]
+        let sz = n.size(withAttributes: na)
+        n.draw(at: NSPoint(x: row.maxX - 10 - sz.width, y: row.minY + (row.height - sz.height) / 2), withAttributes: na)
+      }
     }
   }
 
