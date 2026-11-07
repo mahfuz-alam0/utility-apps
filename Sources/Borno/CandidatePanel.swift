@@ -63,12 +63,12 @@ final class CandidatePanel: NSPanel {
 }
 
 private final class ListView: NSView {
-  static let headH: CGFloat = 28, rowH: CGFloat = 34, inset: CGFloat = 6
+  static let headH: CGFloat = 22, rowH: CGFloat = 26, inset: CGFloat = 4
   private var header = "", items: [String] = [], selected = 0
   var onPick: ((Int) -> Void)?
 
-  private let headFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-  private let wordFont = NSFont.systemFont(ofSize: 19)
+  private let headFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+  private let wordFont = NSFont.systemFont(ofSize: 15)
 
   override var isFlipped: Bool { true }
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -81,12 +81,12 @@ private final class ListView: NSView {
   var idealSize: NSSize {
     let words = items.map { ($0 as NSString).size(withAttributes: [.font: wordFont]).width }.max() ?? 0
     let head = (header as NSString).size(withAttributes: [.font: headFont]).width
-    let w = min(max(words + 2 * (Self.inset + 12), head + 28, 150), 420)
+    let w = min(max(words + 2 * (Self.inset + 10), head + 24, 110), 420)
     return NSSize(width: w, height: Self.headH + Self.inset + CGFloat(items.count) * Self.rowH + Self.inset)
   }
 
   override func draw(_ dirtyRect: NSRect) {
-    (header as NSString).draw(at: NSPoint(x: 14, y: 7), withAttributes: [.font: headFont, .foregroundColor: NSColor.secondaryLabelColor])
+    (header as NSString).draw(at: NSPoint(x: 12, y: 4), withAttributes: [.font: headFont, .foregroundColor: NSColor.secondaryLabelColor])
     NSColor.separatorColor.setFill()
     NSRect(x: 0, y: Self.headH, width: bounds.width, height: 0.5).fill()
 
@@ -96,11 +96,11 @@ private final class ListView: NSView {
       let on = i == selected
       if on {
         NSColor.controlAccentColor.setFill()
-        NSBezierPath(roundedRect: row, xRadius: 8, yRadius: 8).fill()
+        NSBezierPath(roundedRect: row, xRadius: 6, yRadius: 6).fill()
       }
       let attrs: [NSAttributedString.Key: Any] = [.font: wordFont, .foregroundColor: on ? NSColor.white : NSColor.labelColor]
       let h = (word as NSString).size(withAttributes: attrs).height
-      (word as NSString).draw(at: NSPoint(x: row.minX + 10, y: row.minY + (row.height - h) / 2), withAttributes: attrs)
+      (word as NSString).draw(at: NSPoint(x: row.minX + 8, y: row.minY + (row.height - h) / 2), withAttributes: attrs)
     }
   }
 
