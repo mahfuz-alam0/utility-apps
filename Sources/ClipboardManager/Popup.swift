@@ -239,8 +239,8 @@ struct PopupView: View {
                     }
                 }
                 .padding(.horizontal, 8).padding(.bottom, 8)
+                .background(OverlayScroller())  // inside the ScrollView so the superview walk finds its NSScrollView
             }
-            .background(OverlayScroller())
             .onChange(of: model.selected) { _, id in
                 if let id { withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(id) } }
             }
