@@ -45,18 +45,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
 
         buildMainMenu()
-        if !launchedAtLogin { openSettings() }  // opening the app by hand shows a window instead of nothing
-    }
-
-    /// Clicking the app (Dock, Launchpad, Finder) while it is already running.
-    func applicationShouldHandleReopen(_ app: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        openSettings()
-        return true
-    }
-
-    // ponytail: login-item launch detection untested; if it misfires the window just opens at login.
-    private var launchedAtLogin: Bool {
-        NSAppleEventManager.shared().currentAppleEvent?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
 
     /// The Settings window turns the app into a regular one (Dock, ⌘Tab, menu bar), which needs a main menu for ⌘Q / ⌘W / ⌘C / ⌘V.

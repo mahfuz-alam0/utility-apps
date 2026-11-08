@@ -238,7 +238,7 @@ struct PopupView: View {
                             .onTapGesture { pick(item) }
                     }
                 }
-                .padding(.leading, 8).padding(.trailing, 14).padding(.bottom, 8)  // extra right room: overlay scrollbar floats there
+                .padding(.horizontal, 8).padding(.bottom, 8)
                 .background(OverlayScroller())  // inside the ScrollView so the superview walk finds its NSScrollView
             }
             .onChange(of: model.selected) { _, id in
@@ -276,8 +276,8 @@ struct Row: View {
             } else if let n = item.image {
                 // fixed slot: row height must not depend on aspect ratio or on whether the thumbnail has loaded
                 Color.primary.opacity(0.05).frame(maxWidth: .infinity).frame(height: 96)
-                    .overlay(alignment: .leading) {
-                        if let img = store.thumbnail(n) { Image(nsImage: img).resizable().scaledToFit() }
+                    .overlay {
+                        if let img = store.thumbnail(n) { Image(nsImage: img).resizable().scaledToFill() }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 4))
             }
