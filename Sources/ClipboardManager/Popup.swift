@@ -238,7 +238,7 @@ struct PopupView: View {
                             .onTapGesture { pick(item) }
                     }
                 }
-                .padding(.horizontal, 8).padding(.bottom, 8)
+                .padding(.leading, 8).padding(.trailing, 14).padding(.bottom, 8)  // extra right room: overlay scrollbar floats there
                 .background(OverlayScroller())  // inside the ScrollView so the superview walk finds its NSScrollView
             }
             .onChange(of: model.selected) { _, id in
