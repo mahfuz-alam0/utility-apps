@@ -230,7 +230,7 @@ struct PopupView: View {
 
     private var list: some View {
         ScrollViewReader { proxy in
-            ScrollView {
+            ThinScrollView {
                 LazyVStack(spacing: 6) {
                     ForEach(store.items) { item in
                         Row(item: item, store: store, model: model, settings: settings)
@@ -239,7 +239,6 @@ struct PopupView: View {
                     }
                 }
                 .padding(.horizontal, 8).padding(.bottom, 8)
-                .background(OverlayScroller())  // inside the ScrollView so the superview walk finds its NSScrollView
             }
             .onChange(of: model.selected) { _, id in
                 if let id { withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(id) } }
@@ -248,16 +247,42 @@ struct PopupView: View {
     }
 }
 
-/// Forces overlay scrollers: legacy ones (mouse attached) reserve a track beside the content, leaving an uneven right gutter.
-struct OverlayScroller: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { NSView() }
-    func updateNSView(_ v: NSView, context: Context) {
-        DispatchQueue.main.async {
-            var p = v.superview
-            while let x = p, !(x is NSScrollView) { p = x.superview }
-            (p as? NSScrollView)?.scrollerStyle = .overlay
+/// Native scrollers reserve a gutter (legacy style) and make the right margin wider than the left.
+/// Hide them and draw a 4pt thumb inside the content's 8pt right padding: 2pt from the cards, 2pt from the edge.
+struct ThinScrollView<Content: View>: View {
+    @ViewBuilder let content: Content
+    @StateObject private var scroll = ScrollFrame.Box()  // not @State: see PopupModel
+
+    var body: some View {
+        GeometryReader { g in
+            ScrollView {
+                content.background(GeometryReader {
+                    Color.clear.preference(key: ScrollFrame.self, value: $0.frame(in: .named(ScrollFrame.space)))
+                })
+            }
+            .scrollIndicators(.hidden)
+            .coordinateSpace(.named(ScrollFrame.space))
+            .onPreferenceChange(ScrollFrame.self) { scroll.frame = $0 }
+            .overlay(alignment: .topTrailing) {
+                let h = g.size.height, frame = scroll.frame
+                if frame.height > h {
+                    let thumb = max(24, h * h / frame.height)
+                    let progress = min(max(-frame.minY / (frame.height - h), 0), 1)
+                    Capsule().fill(Color.secondary.opacity(0.5))
+                        .frame(width: 4, height: thumb)
+                        .offset(x: -2, y: (h - thumb) * progress)
+                        .allowsHitTesting(false)  // ponytail: display only, add a DragGesture if dragging the thumb is wanted
+                }
+            }
         }
     }
+}
+
+private struct ScrollFrame: PreferenceKey {
+    final class Box: ObservableObject { @Published var frame = CGRect.zero }
+    static let space = "ThinScrollView"
+    static let defaultValue = CGRect.zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
 struct Row: View {
@@ -339,7 +364,7 @@ struct EmojiPicker: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollViewReader { proxy in
-                    ScrollView {
+                    ThinScrollView {
                         LazyVGrid(columns: columns, spacing: 0) {
                             ForEach(list.indices, id: \.self) { i in
                                 Text(list[i].char).font(.system(size: 24))
