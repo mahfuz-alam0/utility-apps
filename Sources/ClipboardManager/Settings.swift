@@ -10,14 +10,6 @@ enum Theme: Int, CaseIterable, Identifiable {
     var appearance: NSAppearance? { [nil, NSAppearance(named: .aqua), NSAppearance(named: .darkAqua)][rawValue] }
 }
 
-enum PopupSize: Int, CaseIterable, Identifiable {
-    case small, medium, large, extraLarge
-    var id: Int { rawValue }
-    var title: String { ["Small", "Medium", "Large", "Extra large"][rawValue] }
-    var size: CGSize { [CGSize(width: 300, height: 400), CGSize(width: 360, height: 480),
-                        CGSize(width: 420, height: 560), CGSize(width: 500, height: 680)][rawValue] }
-}
-
 struct HotKeySpec: Codable, Equatable {
     var code: Int
     var mods: Int  // Carbon modifier mask
@@ -47,7 +39,6 @@ final class Settings: ObservableObject {
     @Published var showTimestamps: Bool { didSet { d.set(showTimestamps, forKey: "showTimestamps") } }
     @Published var openAtCaret: Bool { didSet { d.set(openAtCaret, forKey: "openAtCaret") } }
     @Published var theme: Theme { didSet { d.set(theme.rawValue, forKey: "theme") } }
-    @Published var popupSize: PopupSize { didSet { d.set(popupSize.rawValue, forKey: "popupSize") } }
     @Published var hotKey: HotKeySpec { didSet { d.set(try? JSONEncoder().encode(hotKey), forKey: "hotKey") } }
     @Published var launchAtLogin: Bool {
         didSet {
@@ -66,7 +57,7 @@ final class Settings: ObservableObject {
         defaults.register(defaults: [
             "maxItems": 25,  // Windows keeps 25
             "persistHistory": true, "recordText": true, "recordImages": true, "ignoreSecrets": true,
-            "showTimestamps": true, "openAtCaret": true, "popupSize": PopupSize.medium.rawValue,
+            "showTimestamps": true, "openAtCaret": true,
         ])
         maxItems = defaults.integer(forKey: "maxItems")
         persistHistory = defaults.bool(forKey: "persistHistory")
@@ -78,7 +69,6 @@ final class Settings: ObservableObject {
         showTimestamps = defaults.bool(forKey: "showTimestamps")
         openAtCaret = defaults.bool(forKey: "openAtCaret")
         theme = Theme(rawValue: defaults.integer(forKey: "theme")) ?? .system
-        popupSize = PopupSize(rawValue: defaults.integer(forKey: "popupSize")) ?? .medium
         hotKey = defaults.data(forKey: "hotKey").flatMap { try? JSONDecoder().decode(HotKeySpec.self, from: $0) } ?? .standard
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }

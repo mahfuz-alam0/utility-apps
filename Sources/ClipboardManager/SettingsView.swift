@@ -63,9 +63,6 @@ struct SettingsView: View {
                     ForEach(Theme.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                Picker("Popup size", selection: $settings.popupSize) {
-                    ForEach(PopupSize.allCases) { Text($0.title).tag($0) }
-                }
                 Toggle("Show timestamps", isOn: $settings.showTimestamps)
             }
 
