@@ -247,28 +247,26 @@ struct PopupView: View {
     }
 }
 
-/// Native scrollers reserve a gutter (legacy style) and make the right margin wider than the left.
-/// Hide them and draw a 4pt thumb inside the content's 8pt right padding: 2pt from the cards, 2pt from the edge.
+/// SwiftUI's ScrollView reserves a legacy-scroller gutter (even with `.hidden`), making the right margin wider than the left,
+/// and resets any AppKit scroller tweaks. So: `.never` (no gutter, both sides 8pt always) plus our own 4pt thumb drawn
+/// inside the content's 8pt right padding: 2pt from the cards, 2pt from the edge.
 struct ThinScrollView<Content: View>: View {
     @ViewBuilder let content: Content
-    @StateObject private var scroll = ScrollFrame.Box()  // not @State: see PopupModel
+    @StateObject private var scroll = Frame()  // not @State: see PopupModel
 
     var body: some View {
         GeometryReader { g in
             ScrollView {
-                content.background(GeometryReader {
-                    Color.clear.preference(key: ScrollFrame.self, value: $0.frame(in: .named(ScrollFrame.space)))
-                })
+                content.onGeometryChange(for: CGRect.self) { $0.frame(in: .named("ThinScrollView")) } action: { scroll.frame = $0 }
             }
-            .scrollIndicators(.hidden)
-            .coordinateSpace(.named(ScrollFrame.space))
-            .onPreferenceChange(ScrollFrame.self) { scroll.frame = $0 }
+            .scrollIndicators(.never)
+            .coordinateSpace(.named("ThinScrollView"))
             .overlay(alignment: .topTrailing) {
                 let h = g.size.height, frame = scroll.frame
                 if frame.height > h {
                     let thumb = max(24, h * h / frame.height)
                     let progress = min(max(-frame.minY / (frame.height - h), 0), 1)
-                    Capsule().fill(Color.secondary.opacity(0.5))
+                    Capsule().fill(Color.secondary.opacity(0.6))
                         .frame(width: 4, height: thumb)
                         .offset(x: -2, y: (h - thumb) * progress)
                         .allowsHitTesting(false)  // ponytail: display only, add a DragGesture if dragging the thumb is wanted
@@ -278,12 +276,7 @@ struct ThinScrollView<Content: View>: View {
     }
 }
 
-private struct ScrollFrame: PreferenceKey {
-    final class Box: ObservableObject { @Published var frame = CGRect.zero }
-    static let space = "ThinScrollView"
-    static let defaultValue = CGRect.zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
-}
+final class Frame: ObservableObject { @Published var frame = CGRect.zero }
 
 struct Row: View {
     let item: ClipItem
