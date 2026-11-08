@@ -37,75 +37,98 @@ final class ShortcutRecorder: ObservableObject {
     }
 }
 
+/// One toolbar tab of the settings window. Short grouped forms that fit without scrolling; the window resizes per tab.
 struct SettingsView: View {
+    enum Pane { case general, history, privacy }
+    let pane: Pane
     @ObservedObject var settings: Settings
     @ObservedObject var store: ClipStore
     @ObservedObject var recorder: ShortcutRecorder
 
     var body: some View {
         Form {
-            Section("General") {
-                Toggle("Launch at login", isOn: $settings.launchAtLogin)
-                Picker("Open popup at", selection: $settings.openAtCaret) {
-                    Text("Text cursor").tag(true)
-                    Text("Mouse pointer").tag(false)
-                }
-                LabeledContent("Shortcut") {
-                    HStack {
-                        Button(recorder.recording ? "Press shortcut…" : settings.hotKey.label) { recorder.toggle(settings) }
-                        Button("Reset") { settings.hotKey = .standard }.disabled(settings.hotKey == .standard)
-                    }
-                }
-            }
-
-            Section("Appearance") {
-                Picker("Theme", selection: $settings.theme) {
-                    ForEach(Theme.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                Toggle("Show timestamps", isOn: $settings.showTimestamps)
-            }
-
-            Section {
-                LabeledContent("Maximum items") {
-                    HStack {
-                        TextField("", value: $settings.maxItems, format: .number)
-                            .multilineTextAlignment(.trailing).frame(width: 56)
-                        Stepper("", value: $settings.maxItems, in: 1...500).labelsHidden()
-                    }
-                }
-                Toggle("Keep history after quitting", isOn: $settings.persistHistory)
-                Toggle("Record text", isOn: $settings.recordText)
-                Toggle("Record images", isOn: $settings.recordImages)
-                Toggle("Pause recording", isOn: $settings.paused)
-                Button("Clear History (\(store.items.filter { !$0.pinned }.count) items)", role: .destructive) { store.clear() }
-            } header: {
-                Text("History")
-            } footer: {
-                Text("Pinned items don't count toward the limit and survive Clear.")
-            }
-
-            Section {
-                LabeledContent("Folder") {
-                    HStack {
-                        Text(settings.saveFolder.isEmpty ? "Off" : (settings.saveFolder as NSString).abbreviatingWithTildeInPath)
-                            .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                        Button("Choose…") { chooseFolder() }
-                        Button("Off") { settings.saveFolder = "" }.disabled(settings.saveFolder.isEmpty)
-                    }
-                }
-            } header: {
-                Text("Save images")
-            } footer: {
-                Text("Every recorded image (⌘⇧3 / ⌘⇧4 screenshots, ⌃⌘⇧4 clipboard screenshots, copied images) is also saved here as a PNG named like a macOS screenshot.")
-            }
-
-            Section("Privacy") {
-                Toggle("Ignore password-manager content", isOn: $settings.ignoreSecrets)
+            switch pane {
+            case .general: general
+            case .history: history
+            case .privacy: privacy
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 720)
+        .controlSize(.small)  // compact rows
+        .scrollDisabled(true)
+        .frame(width: 420)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private var general: some View {
+        Section {
+            Toggle("Launch at login", isOn: $settings.launchAtLogin)
+            LabeledContent("Shortcut") {
+                HStack(spacing: 6) {
+                    Button(recorder.recording ? "Press shortcut…" : settings.hotKey.label) { recorder.toggle(settings) }
+                    if settings.hotKey != .standard {
+                        Button { settings.hotKey = .standard } label: { Image(systemName: "arrow.counterclockwise") }
+                            .buttonStyle(.borderless).help("Reset to \(HotKeySpec.standard.label)")
+                    }
+                }
+            }
+            Picker("Open popup at", selection: $settings.openAtCaret) {
+                Text("Text cursor").tag(true)
+                Text("Mouse pointer").tag(false)
+            }
+        }
+        Section {
+            Picker("Theme", selection: $settings.theme) {
+                ForEach(Theme.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Toggle("Show timestamps", isOn: $settings.showTimestamps)
+        }
+    }
+
+    @ViewBuilder private var history: some View {
+        Section {
+            LabeledContent("Maximum items") {
+                HStack(spacing: 4) {
+                    TextField("", value: $settings.maxItems, format: .number)
+                        .multilineTextAlignment(.trailing).frame(width: 48)
+                    Stepper("", value: $settings.maxItems, in: 1...500).labelsHidden()
+                }
+            }
+            Toggle("Record text", isOn: $settings.recordText)
+            Toggle("Record images", isOn: $settings.recordImages)
+        } footer: {
+            Text("Pinned items don't count toward the limit and survive Clear.")
+        }
+        Section {
+            LabeledContent("Save images to") {
+                HStack(spacing: 6) {
+                    Text(settings.saveFolder.isEmpty ? "Off" : (settings.saveFolder as NSString).abbreviatingWithTildeInPath)
+                        .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Button("Choose…") { chooseFolder() }
+                    if !settings.saveFolder.isEmpty {
+                        Button { settings.saveFolder = "" } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.borderless).foregroundStyle(.secondary).help("Stop saving images")
+                    }
+                }
+            }
+        } footer: {
+            Text("Also saves every recorded image here as a PNG, named like a macOS screenshot.")
+        }
+        Section {
+            let n = store.items.filter { !$0.pinned }.count
+            LabeledContent("\(n) unpinned \(n == 1 ? "item" : "items")") {
+                Button("Clear History", role: .destructive) { store.clear() }.disabled(n == 0)
+            }
+        }
+    }
+
+    @ViewBuilder private var privacy: some View {
+        Section {
+            Toggle("Pause recording", isOn: $settings.paused)
+            Toggle("Keep history after quitting", isOn: $settings.persistHistory)
+            Toggle("Ignore password-manager content", isOn: $settings.ignoreSecrets)
+        }
     }
 
     private func chooseFolder() {
@@ -124,10 +147,22 @@ final class SettingsWindow {
 
     func show(settings: Settings, store: ClipStore) {
         if window == nil {
-            let w = NSWindow(contentViewController: NSHostingController(
-                rootView: SettingsView(settings: settings, store: store, recorder: recorder)))
-            w.title = "Clipboard Manager Settings"
+            let tabs = NSTabViewController()
+            tabs.tabStyle = .toolbar  // standard macOS preferences: icon tabs, window title follows the tab
+            for (pane, label, symbol) in [(SettingsView.Pane.general, "General", "gearshape"),
+                                          (.history, "History", "clock.arrow.circlepath"),
+                                          (.privacy, "Privacy", "hand.raised")] {
+                let vc = NSHostingController(rootView: SettingsView(pane: pane, settings: settings, store: store, recorder: recorder))
+                vc.sizingOptions = .preferredContentSize  // lets the tab controller resize the window to each pane
+                vc.title = label  // shown as the window title for the selected tab
+                let item = NSTabViewItem(viewController: vc)
+                item.label = label
+                item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+                tabs.addTabViewItem(item)
+            }
+            let w = NSWindow(contentViewController: tabs)
             w.styleMask = [.titled, .closable]
+            w.toolbarStyle = .preference
             w.isReleasedWhenClosed = false
             w.center()
             NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { [recorder] _ in
