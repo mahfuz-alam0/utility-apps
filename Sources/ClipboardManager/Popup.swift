@@ -69,6 +69,7 @@ final class PopupController {
         model.query = ""
         model.emoji = 0
 
+        panel.setContentSize(settings.popupSize.size)
         let fx = NSVisualEffectView(frame: panel.contentLayoutRect)
         fx.material = .popover  // follows light/dark
         fx.state = .active
@@ -187,7 +188,7 @@ struct PopupView: View {
                 if store.items.isEmpty { empty } else { list }
             }
         }
-        .frame(width: 360, height: 480)
+        .frame(width: settings.popupSize.size.width, height: settings.popupSize.size.height)
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.cardStroke, lineWidth: 1))
         .scaleEffect(model.shown ? 1 : 0.96, anchor: .top)
         .opacity(model.shown ? 1 : 0)
@@ -240,6 +241,7 @@ struct PopupView: View {
                 }
                 .padding(.horizontal, 8).padding(.bottom, 8)
             }
+            .scrollIndicators(.hidden)  // legacy scrollbar track ate width and left an uneven right gutter
             .onChange(of: model.selected) { _, id in
                 if let id { withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(id) } }
             }
