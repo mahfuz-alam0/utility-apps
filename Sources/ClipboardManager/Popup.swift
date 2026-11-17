@@ -293,12 +293,15 @@ struct Row: View {
                 Text(t).font(.system(size: 13)).lineLimit(4).frame(maxWidth: .infinity, alignment: .leading)
             } else if let n = item.image {
                 // fixed slot: row height must not depend on aspect ratio or on whether the thumbnail has loaded.
-                // Fit, not fill: the whole image stays visible (letterboxed) so you can check it before pasting.
-                Color.primary.opacity(0.05).frame(maxWidth: .infinity).frame(height: 96)
-                    .overlay {
-                        if let img = store.thumbnail(n) { Image(nsImage: img).resizable().scaledToFit() }
+                // Fit, not fill: the whole image stays visible, left-aligned, so you can check it before pasting.
+                Color.clear.frame(maxWidth: .infinity).frame(height: 96)
+                    .overlay(alignment: .leading) {
+                        if let img = store.thumbnail(n) {
+                            Image(nsImage: img).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 4))
+                        } else {
+                            RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.05))
+                        }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
             }
             if settings.showTimestamps {
                 Text(item.date.formatted(.relative(presentation: .named)))
