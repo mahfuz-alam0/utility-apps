@@ -35,6 +35,8 @@ final class InputController: IMKInputController {
       if n < candidates.count { highlight(n); commit() }
       return true
     }
+    // ⌘⌫ (and ⌃⌫) delete the whole composition, list included; passing them on left the list open.
+    if composing, event.keyCode == 51, mods.contains(.command) || mods.contains(.control) { cancel(); return true }
     if mods.contains(.command) || mods.contains(.control) { return false }   // shortcuts belong to the app
 
     if composing {
