@@ -1,16 +1,15 @@
 Borno
 Copyright (c) 2026 Mahfuz Alam
 
-Dictionary and autocorrect data (words.txt, autocorrect.txt)
-------------------------------------------------------------
-Derived from Avro Keyboard 5.6.0, Copyright (c) OmicronLab (https://www.omicronlab.com),
-used under the Mozilla Public License 1.1: https://www.mozilla.org/MPL/1.1/
-
-These two files remain under the MPL 1.1. Their source form is the Avro Keyboard database they were
-extracted from, and the extraction script is in the Borno source repository:
-https://github.com/mahfuz-alam0/utility-apps (Scripts/borno/make-dictionary.py).
-The phonetic rules follow Avro Phonetic.
+iAvro data and engine
+---------------------
+data.json, regex.json, autodict.plist and database.db3 are taken unchanged from iAvro 1.5,
+Copyright (c) OmicronLab (https://www.omicronlab.com). Borno's Phonetic.swift and Lexicon.swift are ports of
+iAvro's AvroParser.m, RegexParser.m, Suggestion.m, Database.m, AutoCorrect.m and CacheManager.m.
+These files are under the Mozilla Public License 1.1: https://www.mozilla.org/MPL/1.1/
+iAvro source: https://github.com/torifat/iAvro
+Port source: https://github.com/mahfuz-alam0/utility-apps (Sources/Borno)
 
 Borno is not affiliated with or endorsed by OmicronLab.
 
-Borno's own code and artwork are under the MIT License (see LICENSE.txt); the MPL 1.1 above covers only the two data files.
+Everything else in Borno is under the MIT License (see LICENSE.txt).

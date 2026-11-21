@@ -10,7 +10,7 @@ final class BornoMenu: NSObject {
     m.addItem(withTitle: "Borno \(version)", action: nil, keyEquivalent: "")
     m.addItem(.separator())
     add(m, "Edit Custom Words…", #selector(editWords))
-    add(m, "Clear Learned Words…", #selector(clearLearned))
+    add(m, "Forget Remembered Words…", #selector(clearLearned))
     m.addItem(.separator())
     add(m, "About Borno", #selector(about))
     return m
@@ -39,15 +39,15 @@ final class BornoMenu: NSObject {
   @objc private func clearLearned() {
     NSApplication.shared.activate(ignoringOtherApps: true)
     let alert = NSAlert()
-    alert.messageText = "Forget learned words?"
-    alert.informativeText = "Borno goes back to its default suggestion order. Your custom words are kept."
+    alert.messageText = "Forget remembered words?"
+    alert.informativeText = "Borno stops preselecting the words you picked before. Your custom words are kept."
     alert.addButton(withTitle: "Forget")
     alert.addButton(withTitle: "Cancel")
     if alert.runModal() == .alertFirstButtonReturn { Lexicon.shared.clearLearned() }
   }
 
   @objc private func about() {
-    let credits = NSMutableAttributedString(string: "Dictionary data from Avro Keyboard (OmicronLab), used under the ")
+    let credits = NSMutableAttributedString(string: "Phonetic rules, dictionary and suggestion logic from iAvro (OmicronLab), used under the ")
     credits.append(NSAttributedString(string: "MPL 1.1", attributes: [.link: URL(string: "https://www.mozilla.org/MPL/1.1/")!]))
     credits.append(NSAttributedString(string: "."))
     credits.addAttributes([.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.labelColor],

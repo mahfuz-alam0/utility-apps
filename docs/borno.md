@@ -1,8 +1,8 @@
 # Borno
 
-Bangla typing on any Mac keyboard, modeled on Avro Keyboard's Avro Phonetic. A real macOS input method (InputMethodKit), so it works in every app. Swift, AppKit, no dependencies.
+Bangla typing on any Mac keyboard that works like iAvro 1.5 (OmicronLab's Avro Phonetic for Mac): same rules, same dictionary, same candidates in the same order, same remembered picks. A real macOS input method (InputMethodKit), so it works in every app. Swift, AppKit, no third-party dependencies.
 
-Type `ami tomake bhalobashi`, get `আমি তোমাকে ভালোবাসি`. The word so far shows inline (underlined) and in a candidate list under the caret.
+Type `ami tOmake bhalobashi`, get `আমি তোমাকে ভালোবাসি`. As in iAvro, the roman text stays inline (underlined) and the Bangla candidates show in a list under the caret.
 
 ## Install
 
@@ -23,41 +23,39 @@ SIGN_ID="Developer ID Application: Name (TEAMID)" NOTARY_PROFILE=borno ./bundle.
 
 | Key | Action |
 |---|---|
-| letters, digits | build the word (digits become ০-৯, `.` becomes ।, `$` becomes ৳) |
-| ↓ ↑ / Tab, ⇧Tab | choose a candidate |
-| ⌥1 … ⌥9 | commit that candidate (the numbers show in the list) |
-| Space, Return | commit the highlighted candidate (Space adds a space) |
-| Esc / Delete | cancel / erase one letter |
-| click | commit that candidate |
-| other punctuation, arrows, ⌘⌃⌥ shortcuts | commit the word, key goes through |
+| letters, digits, punctuation | build the word (digits become ০-৯, `.` becomes ।); leading and trailing punctuation stays out of the dictionary lookup, as in iAvro |
+| ↓ ↑ | choose a candidate |
+| Space, Return, Tab | commit the highlighted candidate (Space and Tab are typed after it; Return adds no new line) |
+| ⌥1 … ⌥9, click | commit that candidate (Borno extra) |
+| Esc / Delete | cancel (Borno extra) / erase one letter |
+| ⌘ ⌃ shortcuts | go to the app |
+| click elsewhere, switch input source | the roman text is inserted as typed (iAvro does the same) |
 
 Rules are Avro's: `o a i I u U e O OI OU rri`, conjuncts form automatically (`kkh` → ক্ষ), the backtick separates letters (``ek`i`` → একই, ``am`ra`` → আমরা), `y Z w r` after a consonant make ফলা, `rr` before a consonant makes reph, `ng ^ :` give ং ঁ ঃ, `t` plus two backticks gives ৎ, `,,` is hasanta.
 
 ## Menu and custom words
 
-Borno's entry in the menu-bar input menu has **Edit Custom Words…**, **Clear Learned Words…** and **About Borno**.
+Borno's entry in the menu-bar input menu has **Edit Custom Words…**, **Forget Remembered Words…** and **About Borno**.
 
-Custom words: one Bangla word per line in `~/Library/Application Support/Borno/user-words.txt` (names, places, slang; `#` starts a comment). They join the dictionary, so a loose spelling finds them like any other word. Saved edits load the next time you click into a text field.
+Custom words (Borno extra): one Bangla word per line in `~/Library/Application Support/Borno/user-words.txt` (names, places, slang; `#` starts a comment). They are searched like iAvro's dictionary, so any spelling iAvro would accept finds them. Saved edits load the next time you click into a text field.
 
 ## Architecture
 
 | File | Role |
 |---|---|
-| [Phonetic.swift](../Sources/Borno/Phonetic.swift) | Roman → Bangla. Longest-match tokens plus a small context state (after consonant / vowel / inherent o) |
-| [Lexicon.swift](../Sources/Borno/Lexicon.swift) | 159k-word dictionary indexed by a loose phonetic key (o-vowel, hasanta, ন/ণ, স/শ/ষ, ত/ট, ড়/র… merged). Binary search: ~0.3 ms per key. Also autocorrect and learned picks |
-| [InputController.swift](../Sources/Borno/InputController.swift) | `IMKInputController`: key handling, marked text, commit |
+| [Phonetic.swift](../Sources/Borno/Phonetic.swift) | Port of iAvro's AvroParser/RegexParser: one rule matcher; `data.json` gives Bangla, `regex.json` gives a regex for dictionary lookup |
+| [Lexicon.swift](../Sources/Borno/Lexicon.swift) | Port of iAvro's Suggestion/Database/AutoCorrect/CacheManager: 159k words from `database.db3`, autocorrect, suffixes, remembered picks |
+| [InputController.swift](../Sources/Borno/InputController.swift) | `IMKInputController`, behaving like iAvro's AvroKeyboardController: keys, inline roman text, candidates, commit |
 | [CandidatePanel.swift](../Sources/Borno/CandidatePanel.swift) | Non-activating blurred panel, light/dark, placed under the caret (flips above at the screen edge) |
-| [Menu.swift](../Sources/Borno/Menu.swift) | Input-menu items: custom words, clear learned, about |
+| [Menu.swift](../Sources/Borno/Menu.swift) | Input-menu items: custom words, forget remembered, about |
 | [main.swift](../Sources/Borno/main.swift) | `IMKServer`; `--register` enables the input source |
 
-Candidate order: words you committed for that spelling (most-committed first), Avro autocorrect, the literal phonetic result, dictionary words with the same key (closest spelling first), then longer words that start the same. So `bhalo` shows ভাল, ভালো, … and every commit counts, so once you pick ভালো more often than ভাল it comes first (`~/Library/Application Support/Borno/learned.json`, written in the background, capped at 20,000 spellings).
+Candidate order (iAvro's): the autocorrect entry (`facebook` → ফেইসবুক), dictionary words that the regex form of the input matches, closest to the phonetic result first, then words built from a shorter dictionary word plus a suffix (`manusher` → মানুষের), then the phonetic result if it is not already listed. So `bhalo` shows ভাল, ভালো, … The row you highlight is remembered for that spelling and highlighted first next time (`~/Library/Application Support/Borno/weight.plist`; on first run Borno takes over iAvro's own `weight.plist` if it finds one).
 
-English words work too: `suggestion` → সাজেশন, `station` → স্টেশন, `teacher` → টিচার. If the plain phonetic result is not the start of any dictionary word, Borno respells the input the way English sounds (`tion`→শন, soft `g`/`c`, `ch`→চ, …) and looks that up. No translation (suggestion → পরামর্শ): that needs a multi-MB English–Bangla dictionary.
-
-Data: [Resources/borno/words.txt](../Resources/borno/words.txt) and `autocorrect.txt` come from the Avro Keyboard 5.6.0 installer (OmicronLab, MPL 1.1) via [make-dictionary.py](../Scripts/borno/make-dictionary.py) (download the installer from OmicronLab; it is not kept in this repo). The licence notice ships inside the app as `NOTICE.txt`. [makeicon.swift](../Scripts/borno/makeicon.swift) draws the icons.
+Data: `data.json`, `regex.json`, `autodict.plist` and `database.db3` in [Resources/borno](../Resources/borno) are iAvro 1.5's files, unchanged (OmicronLab, MPL 1.1; the ported Swift files are MPL 1.1 too). The licence notice ships inside the app as `NOTICE.txt`. [makeicon.swift](../Scripts/borno/makeicon.swift) draws the icons.
 
 ## Borno limitations
 
 - Apps that report no caret position get the list near the mouse.
-- No settings window, no fixed (non-phonetic) layouts.
-- Conjuncts follow Avro's table only (`kn` stays ক + ন).
+- No settings window, no fixed (non-phonetic) layouts. iAvro's settings are fixed at its defaults: dictionary on, Return adds no new line.
+- Candidate list is Borno's own panel, not the system one iAvro uses; it looks different, the rows are the same.

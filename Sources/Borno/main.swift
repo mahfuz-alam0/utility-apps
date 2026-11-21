@@ -56,8 +56,8 @@ if Bundle.main.bundleURL.deletingLastPathComponent().lastPathComponent != "Input
 let server = IMKServer(
   name: Bundle.main.infoDictionary?["InputMethodConnectionName"] as? String,
   bundleIdentifier: Bundle.main.bundleIdentifier)
-Lexicon.shared.loadBundled()
+_ = Lexicon.shared   // loads the dictionary now, not on the first key
 NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
-  Lexicon.shared.flush()
+  Lexicon.shared.save()
 }
 NSApplication.shared.run()

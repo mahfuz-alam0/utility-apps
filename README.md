@@ -47,6 +47,6 @@ New apps, fixes, docs and ideas are all welcome. Read [CONTRIBUTING.md](CONTRIBU
 
 | App | What | Licence |
 |---|---|---|
-| Borno | `words.txt`, `autocorrect.txt` derived from Avro Keyboard (OmicronLab) | MPL 1.1 (those two files only) |
+| Borno | iAvro 1.5 data files and the ported engine (`Phonetic.swift`, `Lexicon.swift`), OmicronLab | MPL 1.1 (those files only) |
 | Adwall | HaGeZi and StevenBlack blocklists, downloaded at runtime, not bundled | GPL-3.0 / MIT, theirs |
 | Clipboard Manager, Prompter | nothing | |

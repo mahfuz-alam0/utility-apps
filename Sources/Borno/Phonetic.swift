@@ -1,150 +1,118 @@
+// Port of iAvro 1.5 (OmicronLab, https://github.com/torifat/iAvro). This file is under the
+// Mozilla Public License 1.1 (https://www.mozilla.org/MPL/1.1/), not the MIT License of the rest of Borno.
+
 import Foundation
 
-/// Avro Phonetic transliteration (roman -> Bangla). Rules follow the Avro Keyboard 5.6 phonetic guide.
-/// Pure function, no state between calls.
-enum Phonetic {
-  private enum Rule {
-    case vowel(ind: String, kar: String)
-    case cons(String)    // one consonant
-    case conj(String)    // consonants (one scalar each) joined by hasanta
-    case sign(String)    // ং ঃ ঁ ৎ hasanta: output as is, next vowel is independent
-    case lit(String)     // digit or punctuation: output as is
-    case special         // y Y Z w r rr aZ `: context rules in `transliterate`
+/// Avro Phonetic, ported rule for rule from iAvro 1.5 (OmicronLab, MPL 1.1): AvroParser.m and RegexParser.m.
+/// One matcher, two rule files: `data.json` turns roman into Bangla, `regex.json` turns roman into a regex that
+/// matches every dictionary spelling the roman could stand for. iAvro's quirks are kept on purpose so the output
+/// is the same: an `exact` rule needs a character after the match, the regex tail is `([ঃঁ]?)`, and the
+/// regex file has no `number` scope (such a rule always passes).
+final class Phonetic {
+  private struct Match { let suffix: Bool; let scope: String; let value: NSString; let negative: Bool }
+  private struct Rule { let matches: [Match]; let replace: String }
+  private struct Pattern { let find: NSString; let replace: String; let rules: [Rule] }
+
+  private let vowel: NSString, consonant: NSString, number: NSString, caseSensitive: NSString
+  private let patterns: [Pattern]   // sorted by iAvro: longest `find` first, then ascending; binary-searched
+  private let maxLength: Int
+  private let isRegex: Bool
+  private static let regexTail = "(\u{09CD}[\u{09AF}\u{09AC}\u{09AE}])?(\u{09CD}?)([\u{0983}\u{0981}]?)"
+
+  /// `regex: true` for regex.json: its "casesensitive" list is regex syntax to drop, not letters to keep.
+  init(_ url: URL, regex: Bool = false) throws {
+    guard let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any],
+      let list = json["patterns"] as? [[String: Any]]
+    else { throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: url]) }
+    func text(_ v: Any?) -> NSString { (v as? String ?? "") as NSString }
+    vowel = text(json["vowel"]); consonant = text(json["consonant"])
+    number = text(json["number"]); caseSensitive = text(json["casesensitive"])
+    patterns = list.map { p in
+      Pattern(find: text(p["find"]), replace: text(p["replace"]) as String,
+        rules: (p["rules"] as? [[String: Any]] ?? []).map { r in
+          Rule(matches: (r["matches"] as? [[String: Any]] ?? []).map { m in
+            Match(suffix: m["type"] as? String == "suffix", scope: m["scope"] as? String ?? "",
+                  value: text(m["value"]), negative: text(m["negative"]).boolValue)
+          }, replace: text(r["replace"]) as String)
+        })
+    }
+    maxLength = patterns.first?.find.length ?? 0
+    isRegex = regex
   }
 
-  private enum Ctx { case none, cons, vowel, inherent, sign }
-
-  private static let hasanta = "\u{09CD}"
-  private static let nukta = "\u{09BC}"
-
-  // Roman -> rule. Longest key wins, so "kkh" beats "kk" beats "k".
-  private static let table: [String: Rule] = {
-    var t: [String: Rule] = [:]
-    func add(_ keys: String, _ rule: Rule) { for k in keys.split(separator: " ") { t[String(k)] = rule } }
-
-    add("o", .vowel(ind: "অ", kar: ""))
-    add("a aa", .vowel(ind: "আ", kar: "া"))
-    add("i", .vowel(ind: "ই", kar: "ি"))
-    add("I ee", .vowel(ind: "ঈ", kar: "ী"))
-    add("u oo", .vowel(ind: "উ", kar: "ু"))
-    add("U", .vowel(ind: "ঊ", kar: "ূ"))
-    add("rri", .vowel(ind: "ঋ", kar: "ৃ"))
-    add("e", .vowel(ind: "এ", kar: "ে"))
-    add("OI", .vowel(ind: "ঐ", kar: "ৈ"))
-    add("O", .vowel(ind: "ও", kar: "ো"))
-    add("OU", .vowel(ind: "ঔ", kar: "ৌ"))
-
-    for (k, v) in [
-      ("k", "ক"), ("q", "ক"), ("kh", "খ"), ("g", "গ"), ("gh", "ঘ"), ("Ng", "ঙ"), ("c", "চ"), ("ch", "ছ"),
-      ("j", "জ"), ("jh", "ঝ"), ("NG", "ঞ"), ("T", "ট"), ("Th", "ঠ"), ("D", "ড"), ("Dh", "ঢ"), ("N", "ণ"),
-      ("t", "ত"), ("th", "থ"), ("d", "দ"), ("dh", "ধ"), ("n", "ন"), ("p", "প"), ("ph", "ফ"), ("f", "ফ"),
-      ("b", "ব"), ("bh", "ভ"), ("v", "ভ"), ("m", "ম"), ("z", "য"), ("l", "ল"), ("sh", "শ"), ("S", "শ"),
-      ("Sh", "ষ"), ("s", "স"), ("h", "হ"), ("R", "ড" + nukta), ("Rh", "ঢ" + nukta), ("J", "জ" + nukta),
-    ] { t[k] = .cons(v) }
-
-    for k in ["y", "Y", "w", "r", "rr", "Z", "aZ", "`"] { t[k] = .special }
-
-    for (k, v) in [("ng", "ং"), (":", "ঃ"), ("^", "ঁ"), ("t``", "ৎ"), (",,", hasanta + "\u{200C}")] { t[k] = .sign(v) }
-    for (k, v) in [(".", "।"), (".`", "."), (":`", ":"), ("$", "৳")] { t[k] = .lit(v) }
-    for (i, d) in "০১২৩৪৫৬৭৮৯".enumerated() { t[String(i)] = .lit(String(d)) }
-
-    // Conjuncts from the guide's table: Bangla consonants (joined by hasanta) = roman spellings.
-    // ফলা (y Z w r after a consonant) come from context, not from here.
-    for entry in """
-      কক=kk কট=kT কত=kt কম=km কল=kl কষ=kkh,kx কষণ=kkhN কষম=kkhm কস=ks,x
-      গণ=gN গধ=gdh গন=gn গম=gm গল=gl ঘন=ghn
-      ঙক=nk,Ngk ঙকষ=Ngkkh,Ngkx ঙখ=Ngkh ঙগ=Ngg ঙঘ=Nggh ঙম=Ngm
-      চচ=cc চছ=cch চঞ=cNG জজ=jj জঝ=jjh জঞ=gg,jNG
-      ঞচ=nc,NGc ঞছ=nch,NGch ঞজ=nj,NGj ঞঝ=njh,NGjh
-      টট=TT টম=Tm ডড=DD ণট=NT ণঠ=NTh ণড=ND ণঢ=NDh ণণ=Nn ণম=Nm
-      তত=tt তথ=tth তন=tn তম=tm দগ=dg দঘ=dgh দদ=dd দধ=ddh দভ=dv,dbh দম=dm ধন=dhn ধম=dhm
-      নট=nT নঠ=nTh নড=nD নত=nt নথ=nth নদ=nd নধ=ndh নন=nn নম=nm নস=ns
-      পট=pT পত=pt পন=pn পপ=pp পল=pl পস=ps ফল=fl,phl
-      বজ=bj বদ=bd বধ=bdh বব=bb বল=bl ভল=vl,bhl
-      মন=mn মপ=mp মফ=mf,mph মব=mb মভ=mv,mbh মম=mm মল=ml মথ=mth
-      লক=lk লগ=lg লট=lT লড=lD লপ=lp লধ=ldh লব=lb,lw লভ=lv,lbh লম=lm লল=ll
-      শচ=shc,Sc শছ=shch,Sch শত=sht,St শন=shn,Sn শম=shm,Sm শল=shl,Sl
-      ষক=Shk ষট=ShT ষঠ=ShTh ষণ=ShN ষপ=Shp ষফ=Shph,Shf ষম=Shm
-      সক=sk সখ=skh সট=sT সত=st সথ=sth সন=sn সপ=sp সফ=sf,sph সম=sm সল=sl সকল=skl
-      হণ=hN হন=hn হম=hm হল=hl
-      """.split(whereSeparator: \.isWhitespace) {
-      let p = entry.split(separator: "=")
-      let joined = p[0].map(String.init).joined(separator: hasanta)
-      for k in p[1].split(separator: ",") { t[String(k)] = .conj(joined) }
-    }
-    return t
-  }()
-
-  private static let maxKey = table.keys.map(\.count).max()!
-
-  static func transliterate(_ input: String) -> String {
-    let s = Array(input)
+  func parse(_ input: String) -> String {
+    if input.isEmpty { return "" }
+    let s = fix(input) as NSString, len = s.length
     var out = ""
-    var ctx = Ctx.none
-    var i = 0
-
-    func match(_ at: Int) -> (key: String, rule: Rule)? {
-      for len in stride(from: min(maxKey, s.count - at), through: 1, by: -1) {
-        let k = String(s[at..<at + len])
-        if let r = table[k] { return (k, r) }
-      }
-      return nil
-    }
-
-    var afterAccent = false
-    while i < s.count {
-      guard let (key, rule) = match(i) else { out.append(s[i]); i += 1; ctx = .none; afterAccent = false; continue }
-      i += key.count
-      let wasAccent = afterAccent
-      afterAccent = false
-
-      switch rule {
-      case .vowel(let ind, let kar):
-        if i < s.count, s[i] == "`" {  // vowel + ` forces the vowel sign
-          i += 1
-          out += kar
-          ctx = kar.isEmpty ? .inherent : .vowel
-        } else if ctx == .cons {
-          out += kar
-          ctx = kar.isEmpty ? .inherent : .vowel
-        } else {
-          out += (key == "a" || key == "aa") && ctx == .vowel ? "য়া" : ind  // samia -> সামিয়া
-          ctx = .vowel
+    var cur = 0
+    while cur < len {
+      let start = cur
+      var matched = false
+      var chunkLen = maxLength
+      while chunkLen > 0, !matched {
+        let end = start + chunkLen
+        if end <= len, let p = find(s.substring(with: NSRange(location: start, length: chunkLen)) as NSString) {
+          let rule = p.rules.first { $0.matches.allSatisfy { holds($0, in: s, start, end) } }
+          out += (rule?.replace ?? p.replace) + (isRegex ? Self.regexTail : "")
+          cur = end - 1
+          matched = true
         }
-      case .cons(let v): out += v; ctx = .cons
-      case .conj(let v): out += v; ctx = .cons
-      case .sign(let v): out += v; ctx = .sign
-      case .lit(let v):
-        // "." between digits stays a dot (3.5); elsewhere it is the danda ।
-        let afterDigit = out.unicodeScalars.last.map { (0x09E6...0x09EF).contains($0.value) } ?? false
-        let beforeDigit = i < s.count && s[i].isASCII && s[i].isNumber
-        out += key == "." && afterDigit && beforeDigit ? "." : v
-        ctx = .none
-      case .special:
-        switch key {
-        case "`": ctx = .none; afterAccent = true
-        case "y":
-          if ctx == .cons { out += hasanta + "য" }
-          else { out += ctx == .none && !wasAccent ? "ইয়" : "য়" }  // yahoo -> ইয়াহু, niyom -> নিয়ম
-          ctx = .cons
-        case "Y": out += "য়"; ctx = .cons
-        case "Z": out += hasanta + "য"; ctx = .cons
-        case "w":
-          if ctx == .cons { out += hasanta + "ব" } else { out += "ও"; ctx = .vowel }
-        case "r":
-          out += ctx == .cons ? hasanta + "র" : "র"
-          ctx = .cons
-        case "rr":  // reph before a consonant: arrtonad -> আর্তনাদ
-          var reph = false
-          switch match(i)?.rule { case .cons?, .conj?: reph = true; default: break }
-          out += reph ? "র" + hasanta : "রর"
-          ctx = reph ? .sign : .cons
-        default:  // "aZ": aZDmin -> অ্যাডমিন, baZk -> ব্যাক
-          out += ctx == .cons ? hasanta + "যা" : "অ" + hasanta + "যা"
-          ctx = .vowel
-        }
+        chunkLen -= 1
       }
+      if !matched { out += s.substring(with: NSRange(location: cur, length: 1)) }
+      cur += 1
     }
     return out
+  }
+
+  /// AvroParser `fix:` lowercases A-Z except case-sensitive letters (`O` stays ও, `o` is অ).
+  /// RegexParser `clean:` lowercases and drops its listed characters.
+  func fix(_ input: String) -> String {
+    let s = input as NSString
+    var out: [unichar] = []
+    for i in 0..<s.length {
+      let c = s.character(at: i)
+      if !Self.has(caseSensitive, c) { out.append(Self.lower(c)) } else if !isRegex { out.append(c) }
+    }
+    return NSString(characters: out, length: out.count) as String
+  }
+
+  private func find(_ chunk: NSString) -> Pattern? {
+    var left = 0, right = patterns.count - 1
+    while right >= left {
+      let mid = (right + left) / 2, f = patterns[mid].find
+      if f.isEqual(to: chunk as String) { return patterns[mid] }
+      if f.length > chunk.length || (f.length == chunk.length && f.compare(chunk as String) == .orderedAscending) {
+        left = mid + 1
+      } else {
+        right = mid - 1
+      }
+    }
+    return nil
+  }
+
+  private func holds(_ m: Match, in s: NSString, _ start: Int, _ end: Int) -> Bool {
+    let len = s.length, chk = m.suffix ? end : start - 1
+    func at(_ set: NSString) -> Bool { chk >= 0 && chk < len && Self.has(set, s.character(at: chk)) }
+    let hit: Bool
+    switch m.scope {
+    case "punctuation": hit = chk < 0 || chk >= len || (!at(vowel) && !at(consonant))
+    case "vowel": hit = at(vowel)
+    case "consonant": hit = at(consonant)
+    case "number" where !isRegex: hit = at(number)
+    case "exact":
+      let n = m.value.length, a = m.suffix ? end : start - n, b = m.suffix ? end + n : start
+      hit = a >= 0 && b < len && m.value.isEqual(to: s.substring(with: NSRange(location: a, length: n)))  // iAvro: b < len
+    default: return true
+    }
+    return hit != m.negative
+  }
+
+  private static func lower(_ c: unichar) -> unichar { c >= 65 && c <= 90 ? c + 32 : c }
+
+  private static func has(_ set: NSString, _ c: unichar) -> Bool {
+    let c = lower(c)
+    for i in 0..<set.length where set.character(at: i) == c { return true }
+    return false
   }
 }
