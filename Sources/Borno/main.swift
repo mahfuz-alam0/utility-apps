@@ -14,14 +14,30 @@ func selfInstall() {
   do {
     NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier!)
       .filter { $0.processIdentifier != getpid() }.forEach { $0.terminate() }  // old installed copy
-    try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-    try? fm.removeItem(at: dest)
-    try fm.copyItem(at: Bundle.main.bundleURL, to: dest)
+    try fm.createDirectory(at: dest, withIntermediateDirectories: true)
+    // Update in place: deleting the bundle makes macOS drop Borno from the enabled input sources,
+    // and only the user can add it back (System Settings consent).
+    let copy = Process()
+    copy.executableURL = URL(fileURLWithPath: "/usr/bin/rsync")
+    copy.arguments = ["-a", "--delete", Bundle.main.bundleURL.path + "/", dest.path + "/"]
+    try copy.run()
+    copy.waitUntilExit()
+    guard copy.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown) }
     let p = Process()
     p.executableURL = dest.appendingPathComponent("Contents/MacOS/Borno")
     p.arguments = ["--register"]
     try p.run()
     p.waitUntilExit()
+    // macOS may start any registered copy with this bundle ID as the input method. A copy outside
+    // Input Methods only runs this installer and quits, so Bangla never appears: remove this copy
+    // (fails quietly on the read-only DMG) and drop it from Launch Services.
+    try? fm.removeItem(at: Bundle.main.bundleURL)
+    let lsregister = Process()
+    lsregister.executableURL = URL(fileURLWithPath:
+      "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister")
+    lsregister.arguments = ["-u", Bundle.main.bundleURL.path]
+    try? lsregister.run()
+    lsregister.waitUntilExit()
     alert.messageText = "Borno is installed"
     alert.informativeText = "Add it once: System Settings > Keyboard > Text Input > Input Sources > + > Bangla > Borno. Then pick Borno from the input menu in the menu bar to type Bangla. If it is not listed, log out and in."
     alert.addButton(withTitle: "Open Keyboard Settings")
@@ -39,6 +55,7 @@ func selfInstall() {
 // `Borno --register` (used by bundle.sh install): tell macOS about the input source and enable it,
 // so it shows up in System Settings > Keyboard > Input Sources without logging out.
 if CommandLine.arguments.contains("--register") {
+  LSRegisterURL(Bundle.main.bundleURL as CFURL, true)   // this copy wins over older ones with the same bundle ID
   let status = TISRegisterInputSource(Bundle.main.bundleURL as CFURL)
   let match = [kTISPropertyBundleID: Bundle.main.bundleIdentifier!] as CFDictionary
   let sources = TISCreateInputSourceList(match, true)?.takeRetainedValue() as? [TISInputSource] ?? []

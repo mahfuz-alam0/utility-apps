@@ -103,9 +103,14 @@ if [ "$1" = "install" ]; then
   DEST="$HOME/Library/Input Methods"
   pkill -x Borno 2>/dev/null || true
   sleep 0.5
-  mkdir -p "$DEST"
-  rm -rf "$DEST/Borno.app"
-  cp -R "$APP" "$DEST/"
+  mkdir -p "$DEST/Borno.app"
+  # Update in place: deleting the bundle makes macOS drop Borno from the enabled input sources,
+  # and only the user can add it back (System Settings consent).
+  rsync -a --delete "$APP/" "$DEST/Borno.app/"
   "$DEST/Borno.app/Contents/MacOS/Borno" --register
   echo "Installed $DEST/Borno.app"
 fi
+
+# macOS may start any registered copy with this bundle ID as the input method; the build copy only runs
+# the installer and quits. Keep it out of Launch Services.
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$PWD/$APP" 2>/dev/null || true
