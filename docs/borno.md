@@ -1,6 +1,6 @@
 # Borno
 
-Bangla typing on any Mac keyboard that works like iAvro 1.5 (OmicronLab's Avro Phonetic for Mac): same rules, same dictionary, same candidates in the same order, same remembered picks. A real macOS input method (InputMethodKit), so it works in every app. Swift, AppKit, no third-party dependencies.
+Bangla typing on any Mac keyboard, fully offline. Built on iAvro 1.5 (OmicronLab's Avro Phonetic for Mac): same rules, same dictionary, same remembered picks, but candidates ranked to match Google Input Tools (`bertho` → বের্থ, `kormo` → কর্ম, `valo` → ভালো). A real macOS input method (InputMethodKit), so it works in every app. Swift, AppKit, no third-party dependencies, no network.
 
 Type `ami tOmake bhalobashi`, get `আমি তোমাকে ভালোবাসি`. As in iAvro, the roman text stays inline (underlined) and the Bangla candidates show in a list under the caret.
 
@@ -50,9 +50,9 @@ Custom words (Borno extra): one Bangla word per line in `~/Library/Application S
 | [Menu.swift](../Sources/Borno/Menu.swift) | Input-menu items: custom words, forget remembered, about |
 | [main.swift](../Sources/Borno/main.swift) | `IMKServer`; `--register` enables the input source |
 
-Candidate order (iAvro's): the autocorrect entry (`facebook` → ফেইসবুক), dictionary words that the regex form of the input matches, closest to the phonetic result first, then words built from a shorter dictionary word plus a suffix (`manusher` → মানুষের), then the phonetic result if it is not already listed. So `bhalo` shows ভাল, ভালো, … The row you highlight is remembered for that spelling and highlighted first next time (`~/Library/Application Support/Borno/weight.plist`; on first run Borno takes over iAvro's own `weight.plist` if it finds one).
+Candidate order: the autocorrect entry (`facebook` → ফেইসবুক), dictionary words that the regex form of the input matches, then words built from a shorter dictionary word plus a suffix (`manusher` → মানুষের), then the phonetic result if it is not already listed (`bertho` → বের্থ, বেরথ: an `r` between a vowel and a consonant is tried as reph first). Dictionary words are ranked by how common they are (`freq.txt`) less how far they are from the phonetic result; the distance counts what one roman letter can mean as a near miss (ো or not, শ/স/ষ, ি/ী, ত/ট, ...), so `bhalo` shows ভালো, ভাল. iAvro ranked by distance alone. On 382 everyday Banglish words Borno's first candidate matches Google Input Tools' for 92% (iAvro's order: 79%). The row you highlight is remembered for that spelling and highlighted first next time (`~/Library/Application Support/Borno/weight.plist`; on first run Borno takes over iAvro's own `weight.plist` if it finds one).
 
-Data: `data.json`, `regex.json`, `autodict.plist` and `database.db3` in [Resources/borno](../Resources/borno) are iAvro 1.5's files, unchanged (OmicronLab, MPL 1.1; the ported Swift files are MPL 1.1 too). The licence notice ships inside the app as `NOTICE.txt`. [makeicon.swift](../Scripts/borno/makeicon.swift) draws the icons.
+Data: `data.json`, `regex.json`, `autodict.plist` and `database.db3` in [Resources/borno](../Resources/borno) are iAvro 1.5's files (OmicronLab, MPL 1.1; the ported Swift files are MPL 1.1 too), unchanged except one `regex.json` rule: a word-initial `a` may also be অ (`arthat` → অর্থাৎ). `freq.txt` is word counts from Bangla subtitles ([FrequencyWords](https://github.com/hermitdave/FrequencyWords) 2018 `bn_full.txt`, Hermit Dave, CC BY-SA 4.0): Bangla-only words seen at least twice, ড় ঢ় য় as single characters. Words it has that the dictionary lacks become candidates when seen 50 times or more, or when close to the typed spelling. The licence notice ships inside the app as `NOTICE.txt`. [makeicon.swift](../Scripts/borno/makeicon.swift) draws the icons.
 
 ## Borno limitations
 

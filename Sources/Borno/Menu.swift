@@ -49,6 +49,8 @@ final class BornoMenu: NSObject {
   @objc private func about() {
     let credits = NSMutableAttributedString(string: "Phonetic rules, dictionary and suggestion logic from iAvro (OmicronLab), used under the ")
     credits.append(NSAttributedString(string: "MPL 1.1", attributes: [.link: URL(string: "https://www.mozilla.org/MPL/1.1/")!]))
+    credits.append(NSAttributedString(string: ". Word frequencies from FrequencyWords (Hermit Dave, OpenSubtitles), "))
+    credits.append(NSAttributedString(string: "CC BY-SA 4.0", attributes: [.link: URL(string: "https://creativecommons.org/licenses/by-sa/4.0/")!]))
     credits.append(NSAttributedString(string: "."))
     credits.addAttributes([.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.labelColor],
                           range: NSRange(location: 0, length: credits.length))

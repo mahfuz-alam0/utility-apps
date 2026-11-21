@@ -48,5 +48,6 @@ New apps, fixes, docs and ideas are all welcome. Read [CONTRIBUTING.md](CONTRIBU
 | App | What | Licence |
 |---|---|---|
 | Borno | iAvro 1.5 data files and the ported engine (`Phonetic.swift`, `Lexicon.swift`), OmicronLab | MPL 1.1 (those files only) |
+| Borno | `freq.txt` word counts from FrequencyWords (Hermit Dave, OpenSubtitles) | CC BY-SA 4.0 (that file only) |
 | Adwall | HaGeZi and StevenBlack blocklists, downloaded at runtime, not bundled | GPL-3.0 / MIT, theirs |
 | Clipboard Manager, Prompter | nothing | |

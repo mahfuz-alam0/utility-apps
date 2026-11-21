@@ -713,7 +713,19 @@
     {
       "find": "a",
       "replace": "(([অএ]্যা?)|[আএ]|([‌‍]?(্য)?া)|(য়া))",
-      "rules": []
+      "rules": [
+        {
+          "matches": [
+            {
+              "type": "prefix",
+              "scope": "punctuation",
+              "value": "",
+              "negative": "FALSE"
+            }
+          ],
+          "replace": "(([অএ]্যা?)|[অআএ]|([‌‍]?(্য)?া)|(য়া))"
+        }
+      ]
     },
     {
       "find": "b",

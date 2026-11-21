@@ -12,8 +12,10 @@ func same(_ a: String, _ b: String) -> Bool { a.utf16.elementsEqual(b.utf16) }
 private func has(_ list: [String], _ s: String) -> Bool { list.contains { same($0, s) } }
 
 /// Suggestions, ported from iAvro 1.5 (OmicronLab, MPL 1.1): Suggestion.m, Database.m, AutoCorrect.m and
-/// CacheManager.m, with iAvro's own data (database.db3, autodict.plist). Same candidates, same order, same
-/// remembered pick per spelling. Main thread only.
+/// CacheManager.m, with iAvro's own data (database.db3, autodict.plist) and the same remembered pick per spelling.
+/// Borno ranks differently, to match Google Input Tools offline: word counts from freq.txt (common words first),
+/// a distance that forgives what one roman letter can mean (ো or not, শ/স/ষ, ি/ী), and reph for words it does
+/// not know (`bertho` -> বের্থ). Main thread only.
 final class Lexicon {
   static let supportDir = FileManager.default
     .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Borno")
@@ -36,12 +38,13 @@ final class Lexicon {
   private var suffixes: [String: String] = [:]     // roman suffix -> Bangla ("der" -> "দের")
   private let autocorrect: [String: String]
   private var freq: [String: Int] = [:]            // Borno extra: how often each word is used (freq.txt)
+  private var extra = Set<String>()                // Borno extra: words from freq.txt that iAvro's dictionary lacks
   private var userWords: [NSString] = []           // Borno extra: searched like a table, after iAvro's
   private var userWordsStamp: Date?
   private let weightURL: URL?, userWordsURL: URL?
   private var weight: [String: String]             // roman -> last highlighted word (iAvro weight.plist)
   private var weightChanged = false
-  private var cache: [String: [String]] = [:]      // roman -> autocorrect + dictionary words
+  private var cache: [String: [(String, Double)]] = [:]   // roman -> autocorrect + dictionary words, scored
   private var recentBase: [String: (base: String, item: String)] = [:]   // word made by suffixing -> its parts
 
   init(resources dir: URL, weightURL: URL? = nil, userWordsURL: URL? = nil) throws {
@@ -74,8 +77,8 @@ final class Lexicon {
     }
     rows("SELECT English, Bangla FROM Suffix") { if let e = $0(0), let b = $0(1) { suffixes[e as String] = b as String } }
 
-    // Borno extra: word counts rank the matches, and words the dictionary lacks (করবো, যাবো) join the table of
-    // their first letter.
+    // Borno extra: word counts rank the matches, and common words the dictionary lacks (করবো, যাবো) join the
+    // table of their first letter.
     var tableOf: [unichar: String] = [:]
     for (name, words) in tables { for w in words where w.length > 0 { tableOf[w.character(at: 0)] = name } }
     var known = Set(tables.values.joined().map { $0 as String })
@@ -84,8 +87,11 @@ final class Lexicon {
       let cols = line.split(separator: "\t")
       guard cols.count == 2, let n = Int(cols[1]) else { continue }
       let w = String(cols[0])
-      freq[w] = n
-      if known.insert(w).inserted, let name = tableOf[(w as NSString).character(at: 0)] { tables[name]?.append(w as NSString) }
+      freq[w, default: 0] += n   // canonically equal spellings (ো or ে + া) are one key: add them up
+      if known.insert(w).inserted, let name = tableOf[(w as NSString).character(at: 0)] {
+        tables[name]?.append(w as NSString)
+        extra.insert(w)
+      }
     }
     reloadIfUserWordsChanged()
   }
@@ -134,7 +140,7 @@ final class Lexicon {
   /// phonetic results not in the list yet. Empty only for empty input.
   func suggest(_ term: String) -> [String] {
     guard !term.isEmpty else { return [] }
-    var list = words(term)
+    var list = words(term).map(\.0)
 
     var alreadySelected = false
     recentBase.removeAll()
@@ -145,7 +151,7 @@ final class Lexicon {
       // iAvro reads the base from its cache, which only holds spellings that were a whole word while typing.
       guard same(Self.split(base).term, base) else { continue }
       let selected = alreadySelected ? nil : weight[base]
-      for item in words(base) where !same(item, base) && !item.isEmpty {   // skip autocorrect's kept English words
+      for (item, _) in words(base) where !same(item, base) && !item.isEmpty {   // skip autocorrect's kept English words
         let s = item as NSString, cut = s.length - 1
         let last = s.substring(from: cut), first = (suffix as NSString).substring(to: 1)
         let word: String
@@ -181,9 +187,10 @@ final class Lexicon {
     return reph == term ? [plain] : [bangla.parse(reph), plain]
   }
 
-  /// Autocorrect entry plus dictionary words for `term`, closest to its phonetic result first. iAvro caches
+  /// Autocorrect entry plus dictionary words for `term`, best first, with their score: how common the word is,
+  /// less how far it is from the phonetic result. Below 0 is worse than the phonetic result itself. iAvro caches
   /// this per spelling as you type; the suffix step reads the cached list of the shorter spelling.
-  private func words(_ term: String) -> [String] {
+  private func words(_ term: String) -> [(String, Double)] {
     if let hit = cache[term], !hit.isEmpty { return hit }
     // Typed `o` after a consonant read as ো too (`bhalo`: ভালো as close as ভাল); then how common a word is decides.
     let oKar = phonetic(term.replacingOccurrences(of: "(?<=[b-df-hj-np-tv-zB-DF-HJ-NP-TV-Z])o(?![iu])", with: "O",
@@ -191,13 +198,14 @@ final class Lexicon {
     let plain = phonetic(term)
     let auto = autocorrect(term)
     let dict = find(term)
-    var list: [String] = []
-    if let auto, !has(dict, auto) { list.append(auto) }
+    var list: [(String, Double)] = []
+    if let auto, !has(dict, auto) { list.append((auto, .infinity)) }
     // Borno: common words first, unless far from what was typed (iAvro sorted by distance alone).
-    list += dict.map { w in
-      (w, Foundation.log(Double(freq[w] ?? 0) + 1) * Self.freqWeight
-        - min(oKar.map { Self.distance($0, w) }.min()!, plain.map { Self.distance($0, w) }.min()! + Self.plainPenalty))
-    }.sorted { $0.1 > $1.1 }.map(\.0)
+    list += dict.compactMap { w in
+      let d = (oKar + plain).map { Self.distance($0, w) }.min()!, n = freq[w] ?? 0
+      if extra.contains(w), n < Self.minNew, d > Self.near { return nil }   // likely a misspelling (ব্যার্থ for bertho)
+      return (w, Foundation.log(Double(n) + 1) * Self.freqWeight - d)
+    }.sorted { $0.1 > $1.1 }
     if cache.count > 5000 { cache.removeAll() }   // ponytail: iAvro never empties it; this only caps memory
     cache[term] = list
     return list
@@ -253,9 +261,11 @@ final class Lexicon {
 
   // MARK: helpers
 
-  static var freqWeight = 1.0
-  static var plainPenalty = Double(ProcessInfo.processInfo.environment["P"] ?? "0")!
-  static var cheap = Double(ProcessInfo.processInfo.environment["C"] ?? "0.3")!
+  // Tuned on 276 everyday Banglish words against Google Input Tools: 74% same first word with iAvro's order, 91% now.
+  private static let freqWeight = 1.5   // per natural log of the word count
+  private static let cheap = 0.3        // cost of a near-miss in `distance`
+  private static let minNew = 50        // rarer words outside the dictionary are mostly misspellings (ব্যার্থ)...
+  private static let near = 1.0         // ...unless this close to the typed word
 
   /// Borno: edit distance over UTF-16 units where what one roman letter can give is close: ি/ী, শ/স/ষ, ত/ট, ...,
   /// and an added or missing ো or ্ (`bhalo`: ভালো, `kormo`: কর্ম).

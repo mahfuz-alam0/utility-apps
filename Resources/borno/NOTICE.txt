@@ -3,13 +3,22 @@ Copyright (c) 2026 Mahfuz Alam
 
 iAvro data and engine
 ---------------------
-data.json, regex.json, autodict.plist and database.db3 are taken unchanged from iAvro 1.5,
-Copyright (c) OmicronLab (https://www.omicronlab.com). Borno's Phonetic.swift and Lexicon.swift are ports of
+data.json, regex.json, autodict.plist and database.db3 are taken from iAvro 1.5,
+Copyright (c) OmicronLab (https://www.omicronlab.com), unchanged except one added regex.json rule
+(a word-initial "a" may match অ). Lexicon.swift is modified to rank candidates by word frequency. Borno's Phonetic.swift and Lexicon.swift are ports of
 iAvro's AvroParser.m, RegexParser.m, Suggestion.m, Database.m, AutoCorrect.m and CacheManager.m.
 These files are under the Mozilla Public License 1.1: https://www.mozilla.org/MPL/1.1/
 iAvro source: https://github.com/torifat/iAvro
 Port source: https://github.com/mahfuz-alam0/utility-apps (Sources/Borno)
 
-Borno is not affiliated with or endorsed by OmicronLab.
+Word frequencies
+----------------
+freq.txt is derived from FrequencyWords (https://github.com/hermitdave/FrequencyWords), content/2018/bn/bn_full.txt,
+Copyright (c) Hermit Dave, built from OpenSubtitles (http://www.opensubtitles.org). Licensed under
+CC BY-SA 4.0: https://creativecommons.org/licenses/by-sa/4.0/
+Changes: kept Bangla-only words seen at least twice; ড় ঢ় য় written as single characters; equal spellings merged.
+freq.txt is under CC BY-SA 4.0 as well.
+
+Borno is not affiliated with or endorsed by OmicronLab, Hermit Dave or OpenSubtitles.
 
 Everything else in Borno is under the MIT License (see LICENSE.txt).

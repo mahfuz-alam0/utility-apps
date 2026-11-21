@@ -34,10 +34,14 @@ private func temp(_ ext: String) -> URL {
   #expect(Lexicon.split(":-)") == ("", ":", "-)"))
 }
 
-@Test func suggestionsInIAvroOrder() throws {
+@Test func suggestionsRankedLikeGoogleInputTools() throws {
   let lex = try Lexicon(resources: resources)
-  #expect(typed(lex, "bhalo").prefix(2) == ["ভাল", "ভালো"])           // closest to the phonetic result first
-  #expect(typed(lex, "amra") == ["আমরা", "আমড়া", "এমরা", "আম্রা"])  // phonetic result last when not a word
+  #expect(typed(lex, "bertho") == ["বের্থ", "বেরথ"])                  // not a word: r before a consonant is reph first
+  #expect(typed(lex, "kormo").first == "কর্ম")                         // the common word, not Avro's করম
+  #expect(typed(lex, "valo").prefix(2) == ["ভালো", "ভাল"])             // o may be ো; the more common one wins
+  #expect(typed(lex, "ghumabo").first == "ঘুমাবো")                    // from freq.txt, not in iAvro's dictionary
+  #expect(typed(lex, "arthat").first == "অর্থাৎ")                      // a word-initial a may be অ
+  #expect(typed(lex, "amra").first == "আমরা")
   #expect(typed(lex, "facebook").first == "ফেইসবুক")                  // autocorrect first
   #expect(typed(lex, "computergulo").first == "কম্পিউটারগুলো")         // autocorrect word + suffix
   #expect(typed(lex, "manusher").first == "মানুষের")                  // dictionary word + suffix
@@ -49,12 +53,12 @@ private func temp(_ ext: String) -> URL {
   defer { try? FileManager.default.removeItem(at: file) }
   let lex = try Lexicon(resources: resources, weightURL: file)
   _ = typed(lex, "bhalo")
-  lex.highlight("ভালো", candidate: "ভালো", for: "bhalo")
-  #expect(lex.remembered("bhalo") == "ভালো")
-  _ = typed(lex, "bhalor")
-  #expect(lex.remembered("bhalor") == "ভালোর")    // a word with a suffix follows the pick for its base
+  lex.highlight("ভাল", candidate: "ভাল", for: "bhalo")
+  #expect(lex.remembered("bhalo") == "ভাল")
+  _ = typed(lex, "bhaloder")
+  #expect(lex.remembered("bhaloder") == "ভালদের")   // a word with a suffix follows the pick for its base
   lex.save()
-  #expect(try Lexicon(resources: resources, weightURL: file).remembered("bhalo") == "ভালো")   // survives restart
+  #expect(try Lexicon(resources: resources, weightURL: file).remembered("bhalo") == "ভাল")   // survives restart
   lex.clearLearned()
   #expect(lex.remembered("bhalo") == nil)
   #expect(try Lexicon(resources: resources, weightURL: file).remembered("bhalo") == nil)    // not re-imported
@@ -68,6 +72,12 @@ private func temp(_ ext: String) -> URL {
   defer { try? FileManager.default.removeItem(at: file) }
   try "# mine\n\u{09B0}\u{09BE}\u{09AB}\u{09C0}\u{09AF}\u{09BC}\u{09BE}\n".write(to: file, atomically: true, encoding: .utf8)  // য + ়
   #expect(typed(try Lexicon(resources: resources, userWordsURL: file), "rafiya").contains { same($0, word) })
+}
+
+@Test func nearMissesAreClose() {
+  #expect(Lexicon.distance("ভাল", "ভালো") == 0.3)   // added ো
+  #expect(Lexicon.distance("শত", "সত") == 0.3)      // শ/স: both "s"
+  #expect(Lexicon.distance("কর", "খর") == 1)
 }
 
 @Test func levenshteinLikeIAvro() {
