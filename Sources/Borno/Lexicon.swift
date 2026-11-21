@@ -129,12 +129,11 @@ final class Lexicon {
     return (part(1), part(2), part(3))
   }
 
-  /// Suggestion.m `getList:`. Autocorrect, then dictionary words closest to the phonetic result first, then
-  /// words built from a shorter dictionary word plus a suffix (`amarder` -> আমার + দের), then the phonetic
-  /// result itself if it is not in the list yet. Empty only for empty input.
+  /// Suggestion.m `getList:`. Autocorrect, then dictionary words, common and close to the phonetic result
+  /// first, then words built from a shorter dictionary word plus a suffix (`amarder` -> আমার + দের), then the
+  /// phonetic results not in the list yet. Empty only for empty input.
   func suggest(_ term: String) -> [String] {
     guard !term.isEmpty else { return [] }
-    let parsed = bangla.parse(term)
     var list = words(term)
 
     var alreadySelected = false
@@ -169,22 +168,36 @@ final class Lexicon {
         }
       }
     }
-    if !has(list, parsed) { list.append(parsed) }
+    for p in phonetic(term) where !has(list, p) { list.append(p) }
     return list
+  }
+
+  /// Borno: Avro's phonetic result, preceded by the one Google's tool gives for words it does not know, where
+  /// `r` between a vowel and a consonant is reph (`bertho` -> বের্থ, Avro: বেরথ).
+  func phonetic(_ term: String) -> [String] {
+    let reph = term.replacingOccurrences(of: "(?<=[aeiouAEIOU])r(?=[bcdfgjklmnpqstvxzBCDFGJKLMNPQSTVXZ])", with: "rr",
+                                         options: .regularExpression)
+    let plain = bangla.parse(term)
+    return reph == term ? [plain] : [bangla.parse(reph), plain]
   }
 
   /// Autocorrect entry plus dictionary words for `term`, closest to its phonetic result first. iAvro caches
   /// this per spelling as you type; the suffix step reads the cached list of the shorter spelling.
   private func words(_ term: String) -> [String] {
     if let hit = cache[term], !hit.isEmpty { return hit }
-    let parsed = bangla.parse(term)
+    // Typed `o` after a consonant read as ো too (`bhalo`: ভালো as close as ভাল); then how common a word is decides.
+    let oKar = phonetic(term.replacingOccurrences(of: "(?<=[b-df-hj-np-tv-zB-DF-HJ-NP-TV-Z])o(?![iu])", with: "O",
+                                                   options: .regularExpression))
+    let plain = phonetic(term)
     let auto = autocorrect(term)
     let dict = find(term)
     var list: [String] = []
     if let auto, !has(dict, auto) { list.append(auto) }
     // Borno: common words first, unless far from what was typed (iAvro sorted by distance alone).
-    list += dict.map { w in (w, Foundation.log(Double(freq[w] ?? 0) + 1) * Self.freqWeight - Double(Self.levenshtein(parsed, w))) }
-      .sorted { $0.1 > $1.1 }.map(\.0)
+    list += dict.map { w in
+      (w, Foundation.log(Double(freq[w] ?? 0) + 1) * Self.freqWeight
+        - min(oKar.map { Self.distance($0, w) }.min()!, plain.map { Self.distance($0, w) }.min()! + Self.plainPenalty))
+    }.sorted { $0.1 > $1.1 }.map(\.0)
     if cache.count > 5000 { cache.removeAll() }   // ponytail: iAvro never empties it; this only caps memory
     cache[term] = list
     return list
@@ -241,6 +254,36 @@ final class Lexicon {
   // MARK: helpers
 
   static var freqWeight = 1.0
+  static var plainPenalty = Double(ProcessInfo.processInfo.environment["P"] ?? "0")!
+  static var cheap = Double(ProcessInfo.processInfo.environment["C"] ?? "0.3")!
+
+  /// Borno: edit distance over UTF-16 units where what one roman letter can give is close: ি/ী, শ/স/ষ, ত/ট, ...,
+  /// and an added or missing ো or ্ (`bhalo`: ভালো, `kormo`: কর্ম).
+  static func distance(_ a: String, _ b: String) -> Double {
+    let x = Array(a.utf16), y = Array(b.utf16)
+    func ins(_ c: UInt16) -> Double { c == 0x09CB || c == 0x09CD ? cheap : 1 }
+    func sub(_ c: UInt16, _ d: UInt16) -> Double { c == d ? 0 : alike[c] != nil && alike[c] == alike[d] ? cheap : 1 }
+    var row = [0.0]
+    for c in y { row.append(row.last! + ins(c)) }
+    for c in x {
+      var diag = row[0]
+      row[0] += ins(c)
+      for j in y.indices {
+        let up = row[j + 1]
+        row[j + 1] = min(up + ins(c), row[j] + ins(y[j]), diag + sub(c, y[j]))
+        diag = up
+      }
+    }
+    return row[y.count]
+  }
+
+  private static let alike: [UInt16: Int] = {
+    var m: [UInt16: Int] = [:]
+    for (i, group) in ["িী", "ুূ", "ইঈ", "উঊ", "শসষ", "নণ", "জয", "তটৎ", "দড", "থঠ", "ধঢ", "র\u{09DC}\u{09DD}", "চছ", "ংঙ"].enumerated() {
+      for c in group.utf16 { m[c] = i }
+    }
+    return m
+  }()
 
   private static let kars = Set("\u{09BE}\u{09BF}\u{09C0}\u{09C1}\u{09C2}\u{09C3}\u{09C7}\u{09C8}\u{09CB}\u{09CC}\u{09C4}".map(String.init))
   private static let vowels = Set(("\u{0985}\u{0986}\u{0987}\u{0988}\u{0989}\u{098A}\u{098B}\u{098F}\u{0990}\u{0993}\u{0994}"
