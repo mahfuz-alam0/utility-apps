@@ -35,6 +35,7 @@ final class Lexicon {
   private var tables: [String: [NSString]] = [:]   // dictionary words, one table per first Bangla letter
   private var suffixes: [String: String] = [:]     // roman suffix -> Bangla ("der" -> "দের")
   private let autocorrect: [String: String]
+  private var freq: [String: Int] = [:]            // Borno extra: how often each word is used (freq.txt)
   private var userWords: [NSString] = []           // Borno extra: searched like a table, after iAvro's
   private var userWordsStamp: Date?
   private let weightURL: URL?, userWordsURL: URL?
@@ -72,6 +73,20 @@ final class Lexicon {
       tables[name.lowercased()] = words
     }
     rows("SELECT English, Bangla FROM Suffix") { if let e = $0(0), let b = $0(1) { suffixes[e as String] = b as String } }
+
+    // Borno extra: word counts rank the matches, and words the dictionary lacks (করবো, যাবো) join the table of
+    // their first letter.
+    var tableOf: [unichar: String] = [:]
+    for (name, words) in tables { for w in words where w.length > 0 { tableOf[w.character(at: 0)] = name } }
+    var known = Set(tables.values.joined().map { $0 as String })
+    let text = (try? String(contentsOf: dir.appendingPathComponent("freq.txt"), encoding: .utf8)) ?? ""
+    for line in text.split(separator: "\n") {
+      let cols = line.split(separator: "\t")
+      guard cols.count == 2, let n = Int(cols[1]) else { continue }
+      let w = String(cols[0])
+      freq[w] = n
+      if known.insert(w).inserted, let name = tableOf[(w as NSString).character(at: 0)] { tables[name]?.append(w as NSString) }
+    }
     reloadIfUserWordsChanged()
   }
 
@@ -167,10 +182,9 @@ final class Lexicon {
     let dict = find(term)
     var list: [String] = []
     if let auto, !has(dict, auto) { list.append(auto) }
-    list += (dict as NSArray).sortedArray { a, b in
-      let x = Self.levenshtein(parsed, a as! String), y = Self.levenshtein(parsed, b as! String)
-      return x < y ? .orderedAscending : x > y ? .orderedDescending : .orderedSame
-    } as! [String]
+    // Borno: common words first, unless far from what was typed (iAvro sorted by distance alone).
+    list += dict.map { w in (w, Foundation.log(Double(freq[w] ?? 0) + 1) * Self.freqWeight - Double(Self.levenshtein(parsed, w))) }
+      .sorted { $0.1 > $1.1 }.map(\.0)
     if cache.count > 5000 { cache.removeAll() }   // ponytail: iAvro never empties it; this only caps memory
     cache[term] = list
     return list
@@ -225,6 +239,8 @@ final class Lexicon {
   }
 
   // MARK: helpers
+
+  static var freqWeight = 1.0
 
   private static let kars = Set("\u{09BE}\u{09BF}\u{09C0}\u{09C1}\u{09C2}\u{09C3}\u{09C7}\u{09C8}\u{09CB}\u{09CC}\u{09C4}".map(String.init))
   private static let vowels = Set(("\u{0985}\u{0986}\u{0987}\u{0988}\u{0989}\u{098A}\u{098B}\u{098F}\u{0990}\u{0993}\u{0994}"
