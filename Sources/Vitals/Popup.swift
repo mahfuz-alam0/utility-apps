@@ -112,6 +112,7 @@ final class PopupController {
     let host = NSHostingView(rootView: PopupView(monitor: monitor, prefs: prefs, model: model) { [weak self] in self?.hide() })
     host.frame = NSRect(origin: .zero, size: size)
     host.autoresizingMask = [.width, .height]
+    host.sizingOptions = []  // the controller sizes the panel per page; inside glass the host would otherwise resize it to fit
     if #available(macOS 26, *) {
       let glass = NSGlassEffectView(frame: host.frame)
       glass.cornerRadius = Self.radius
