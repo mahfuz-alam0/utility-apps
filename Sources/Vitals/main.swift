@@ -2,10 +2,9 @@ import AppKit
 import Combine
 
 // Menu-bar vitals, e.g. "52° 47%": CPU temperature, memory pressure, and optionally CPU load, battery and network,
-// each as a number, a gauge or both. Click for the popup. Temperature and memory blend from the plain menu-bar colour
-// through orange to red as they climb; CPU load and memory as gauges sit as bars under the temperature. Everything
-// turns orange/red when macOS itself reports thermal throttling, memory pressure or a low battery, so that warning
-// follows the system's verdict, not a guessed threshold.
+// each as a number, a gauge or both. Click for the popup. Temperature, CPU load and memory each blend from the plain
+// menu-bar colour through orange to red as they climb, so colour creeps in instead of flipping at one reading; CPU load
+// and memory as gauges sit as bars under the temperature. A low battery turns its own reading orange, then red.
 
 @MainActor
 private final class App: NSObject, NSApplicationDelegate {
@@ -14,7 +13,7 @@ private final class App: NSObject, NSApplicationDelegate {
   private let prefs = Prefs()
   private lazy var popup = PopupController(monitor: monitor, prefs: prefs)
   // Re-setting an unchanged image still relayouts the status item; that was most of the app's CPU, so skip it.
-  private var shown: (parts: [Part], level: Level)?
+  private var shown: [Part]?
   private var watch: AnyCancellable?
 
   func applicationDidFinishLaunching(_ notification: Notification) {
@@ -35,12 +34,11 @@ private final class App: NSObject, NSApplicationDelegate {
     guard let button = item.button else { return }
     button.toolTip = MenuBar.summary(s)
     let parts = MenuBar.parts(s, display)
-    let level = MenuBar.level(s, display)
-    guard shown.map({ $0.parts != parts || $0.level != level }) ?? true else { return }
-    shown = (parts, level)
+    guard parts != shown else { return }
+    shown = parts
     button.image = parts.isEmpty
       ? NSImage(systemSymbolName: "waveform.path.ecg", accessibilityDescription: "Vitals")  // everything off: still clickable
-      : MenuBar.image(parts, level: level)
+      : MenuBar.image(parts)
     button.setAccessibilityLabel("Vitals: " + MenuBar.summary(s))
   }
 

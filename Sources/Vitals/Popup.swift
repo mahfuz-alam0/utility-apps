@@ -49,8 +49,8 @@ final class PopupModel: ObservableObject {
 
 @MainActor
 final class PopupController {
-  static let width: CGFloat = 340
-  static let radius: CGFloat = 16
+  static let width: CGFloat = 360
+  static let radius: CGFloat = 20
   /// The overview fits its rows; detail and settings pages need the full height.
   static func height(_ page: PopupModel.Page, battery: Bool) -> CGFloat {
     page != .overview ? 452 : battery ? 308 : 257
@@ -109,18 +109,25 @@ final class PopupController {
     model.hovered = nil
     model.shown = false
     let size = NSSize(width: Self.width, height: Self.height(.overview, battery: monitor.sample.battery != nil))
-    let blur = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
-    blur.autoresizingMask = [.width, .height]
-    blur.material = .hudWindow
-    blur.blendingMode = .behindWindow
-    blur.state = .active
-    blur.appearance = NSAppearance(named: .darkAqua)
-    blur.maskImage = Self.mask
     let host = NSHostingView(rootView: PopupView(monitor: monitor, prefs: prefs, model: model) { [weak self] in self?.hide() })
-    host.frame = blur.bounds
+    host.frame = NSRect(origin: .zero, size: size)
     host.autoresizingMask = [.width, .height]
-    blur.addSubview(host)
-    panel.contentView = blur
+    if #available(macOS 26, *) {
+      let glass = NSGlassEffectView(frame: host.frame)
+      glass.cornerRadius = Self.radius
+      glass.appearance = NSAppearance(named: .darkAqua)
+      glass.contentView = host
+      panel.contentView = glass
+    } else {
+      let blur = NSVisualEffectView(frame: host.frame)
+      blur.material = .hudWindow
+      blur.blendingMode = .behindWindow
+      blur.state = .active
+      blur.appearance = NSAppearance(named: .darkAqua)
+      blur.maskImage = Self.mask
+      blur.addSubview(host)
+      panel.contentView = blur
+    }
 
     // centred under the status item, kept on its screen
     let screen = (anchor.screen ?? NSScreen.main)?.visibleFrame ?? anchor.frame
@@ -166,9 +173,12 @@ extension Level {
   }
 }
 
-/// Cool green, warm amber, hot coral; macOS's own throttling verdict overrides.
-func heatColor(_ celsius: Double, _ level: Level) -> Color {
-  level != .ok ? level.color : celsius >= 90 ? .cpuTint : celsius >= 70 ? .netTint : .batTint
+/// `calm` while a vital is normal, blending through orange to red as it climbs: the menu bar's ramp, so nothing flips at one reading.
+func heated(_ calm: Color, _ heat: Double) -> Color { Color(nsColor: MenuBar.shade(heat, ink: NSColor(calm))) }
+
+extension Sample {
+  var cpuHeat: Double { temperature.map(MenuBar.tempHeat) ?? MenuBar.loadHeat(load?.total ?? 0) }
+  var memoryHeat: Double { MenuBar.memoryHeat(pressurePercent ?? 0) }
 }
 
 private func percent(_ fraction: Double) -> String { "\(Int((fraction * 100).rounded()))%" }
@@ -198,10 +208,8 @@ struct PopupView: View {
   var body: some View {
     let s = monitor.sample
     ZStack {
-      LinearGradient(colors: [Color(red: 0.10, green: 0.13, blue: 0.17), Color(red: 0.05, green: 0.06, blue: 0.08)],
-                     startPoint: .top, endPoint: .bottom).opacity(0.9)
-      // the ambient light takes the colour of the overall verdict
-      RadialGradient(colors: [s.health.level.color.opacity(0.08), .clear], center: .topLeading, startRadius: 0, endRadius: 320)
+      // a light dark wash keeps white text readable over bright wallpapers without hiding the glass
+      LinearGradient(colors: [.black.opacity(0.18), .black.opacity(0.32)], startPoint: .top, endPoint: .bottom)
       Group {
         switch model.page {
         case .overview:
@@ -213,7 +221,8 @@ struct PopupView: View {
           DetailPage(s: s, history: monitor.history, model: model).transition(.move(edge: .trailing).combined(with: .opacity))
         }
       }
-      .padding(14)
+      .padding(.horizontal, 18)
+      .padding(.vertical, 14)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .clipShape(RoundedRectangle(cornerRadius: PopupController.radius))
@@ -276,17 +285,17 @@ struct Overview: View {
       Trace(values: trace, range: t == nil ? 0...100 : around(trace, minSpan: 10), color: .cpuTint)
     } value: {
       Big(value: t.map { "\(Int($0.rounded()))" } ?? load.map(String.init) ?? "–", unit: t == nil ? "%" : "°C", size: 18)
-        .foregroundStyle(s.thermalLevel == .ok ? Color.text1 : s.thermalLevel.color)
+        .foregroundStyle(heated(.text1, s.cpuHeat))
     }
   }
 
   private var memory: some View {
     VitalRow(symbol: "memorychip", title: "Memory", detail: s.memory.map { "\(gigabytes($0.used)) of \(gigabytes($0.total))" } ?? "–",
              tint: .memTint, page: .memory, model: model) {
-      Trace(values: history.pressure, range: 0...100, color: s.memoryLevel == .ok ? .memTint : s.memoryLevel.color)
+      Trace(values: history.pressure, range: 0...100, color: .memTint)
     } value: {
       Big(value: s.pressurePercent.map(String.init) ?? "–", unit: "%", size: 18)
-        .foregroundStyle(s.memoryLevel == .ok ? Color.text1 : s.memoryLevel.color)
+        .foregroundStyle(heated(.text1, s.memoryHeat))
     }
   }
 
@@ -456,9 +465,10 @@ struct DetailPage: View {
     return VStack(spacing: 12) {
       hero(gauge: {
         ZStack {
-          Ring(fraction: t.map(MenuBar.heat) ?? load.total, color: t.map { heatColor($0, s.thermalLevel) } ?? .cpuTint)
+          Ring(fraction: t.map(MenuBar.heat) ?? load.total, color: heated(t == nil ? .cpuTint : .batTint, s.cpuHeat))
           VStack(spacing: 0) {
             Big(value: t.map { "\(Int($0.rounded()))" } ?? "\(Int((load.total * 100).rounded()))", unit: t == nil ? "%" : "°C", size: 26)
+              .foregroundStyle(heated(.text1, s.cpuHeat))
             Text(t == nil ? "load" : "hottest core").font(.system(size: 10)).foregroundStyle(Color.text3)
           }
         }
@@ -503,9 +513,9 @@ struct DetailPage: View {
     return VStack(spacing: 12) {
       hero(gauge: {
         ZStack {
-          Ring(fraction: Double(p) / 100, color: s.memoryLevel == .ok ? .memTint : s.memoryLevel.color)
+          Ring(fraction: Double(p) / 100, color: .memTint)  // blue blends to mud on the way to orange; the number carries the heat
           VStack(spacing: 0) {
-            Big(value: "\(p)", unit: "%", size: 26)
+            Big(value: "\(p)", unit: "%", size: 26).foregroundStyle(heated(.text1, s.memoryHeat))
             Text("pressure").font(.system(size: 10)).foregroundStyle(Color.text3)
           }
         }
@@ -635,13 +645,16 @@ struct SettingsPage: View {
         ForEach(Metric.allCases) { metric in
           HStack(spacing: 8) {
             Image(systemName: metric.symbol).font(.system(size: 12)).foregroundStyle(Color.text2).frame(width: 18)
-            Text(metric.title).font(.system(size: 12.5))
+            Text(metric.title).font(.system(size: 12.5)).fixedSize()
             Spacer(minLength: 4)
-            Segments(value: prefs[metric]) { prefs[metric] = $0 }
+            Picker(metric.title, selection: Binding { prefs[metric] } set: { prefs[metric] = $0 }) {
+              ForEach(Display.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented).labelsHidden().controlSize(.small).fixedSize()
           }
           .frame(height: 38)
-          .padding(.horizontal, 10)
-          if metric != Metric.allCases.last { Divider().overlay(Color.white.opacity(0.04)).padding(.leading, 36) }
+          .padding(.horizontal, 12)
+          if metric != Metric.allCases.last { Divider().overlay(Color.white.opacity(0.04)).padding(.leading, 38).padding(.trailing, 12) }
         }
       }
       .background(tileShape())
@@ -655,7 +668,7 @@ struct SettingsPage: View {
         }
         .frame(height: 38)
         .padding(.horizontal, 12)
-        Divider().overlay(Color.white.opacity(0.04)).padding(.leading, 12)
+        Divider().overlay(Color.white.opacity(0.04)).padding(.horizontal, 12)
         Button { NSApp.terminate(nil) } label: {
           HStack {
             Text("Quit Vitals").font(.system(size: 12.5))
@@ -675,29 +688,6 @@ struct SettingsPage: View {
       Text("Vitals \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev") · updates every \(Int(Monitor.interval)) s")
         .font(.system(size: 10.5)).foregroundStyle(Color.text3).frame(maxWidth: .infinity)
     }
-  }
-}
-
-struct Segments: View {
-  let value: Display
-  let set: (Display) -> Void
-
-  var body: some View {
-    HStack(spacing: 2) {
-      ForEach(Display.allCases) { option in
-        Button { withAnimation(.snappy(duration: 0.18)) { set(option) } } label: {
-          Text(option.title)
-            .font(.system(size: 10.5, weight: .medium))
-            .foregroundStyle(option == value ? Color.text1 : Color.text2)
-            .frame(width: 40, height: 22)
-            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.white.opacity(option == value ? 0.16 : 0)))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-      }
-    }
-    .padding(2)
-    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.black.opacity(0.28)))
   }
 }
 

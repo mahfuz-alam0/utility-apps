@@ -17,7 +17,7 @@ struct Part: Equatable {
   }
 }
 
-/// The status item is one image: template (system-tinted) normally, drawn in orange/red when macOS reports trouble.
+/// The status item is one image: template (system-tinted) normally, each metric blending toward orange/red as it climbs.
 enum MenuBar {
   static let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
   static let small = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
@@ -49,7 +49,8 @@ enum MenuBar {
         part = Part(gauge: .bar(step(Double(p) / 100)), lines: ["\(p)%"], reserve: "88%", heat: memoryHeat(p))
       case .battery:
         guard let b = s.battery else { return nil }
-        part = Part(gauge: .battery(step(Double(b.percent) / 100), symbol: b.powerSymbol), lines: ["\(b.percent)%"], reserve: "88%")
+        part = Part(gauge: .battery(step(Double(b.percent) / 100), symbol: b.powerSymbol), lines: ["\(b.percent)%"], reserve: "88%",
+                    heat: Double(s.batteryLevel.rawValue) / 2)  // low battery: orange at 10 %, red at 5 %
       case .network:
         let n = s.network ?? NetRate()
         let arrows = mode.showsGauge ? ["", ""] : ["↑ ", "↓ "]  // the gauge already draws the arrows
@@ -63,16 +64,6 @@ enum MenuBar {
     }
   }
 
-  /// Only metrics on screen can tint it: a hot CPU shouldn't colour a menu bar that only shows the battery.
-  static func level(_ s: Sample, _ display: [Metric: Display]) -> Level {
-    let on = { (m: Metric) in (display[m] ?? .off) != .off }
-    return [
-      on(.temperature) || on(.load) ? s.thermalLevel : .ok,
-      on(.memory) ? s.memoryLevel : .ok,
-      on(.battery) ? s.batteryLevel : .ok,
-    ].max()!
-  }
-
   static func summary(_ s: Sample) -> String {
     [
       s.temperature.map { "CPU \(Int($0.rounded())) °C" },
@@ -83,13 +74,14 @@ enum MenuBar {
     ].compactMap { $0 }.joined(separator: " · ")
   }
 
-  static func image(_ parts: [Part], level: Level) -> NSImage {
+  /// Each metric tints itself by its own heat, so colour creeps in gradually instead of the whole bar flipping at once.
+  static func image(_ parts: [Part]) -> NSImage {
     let widths = parts.map(width)
     let total = widths.reduce(0, +) + spacing * CGFloat(max(parts.count - 1, 0))
     let image = NSImage(size: NSSize(width: max(total, 1), height: height), flipped: false) { _ in
       // runs at draw time, so a non-template image still matches a light or dark menu bar
       let dark = NSAppearance.currentDrawing().bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-      let ink: NSColor = level == .critical ? .systemRed : level == .warning ? .systemOrange : dark ? .white : .black
+      let ink: NSColor = dark ? .white : .black
       var x: CGFloat = 0
       for (part, w) in zip(parts, widths) {
         let color = shade(part.heat, ink: ink)
@@ -118,7 +110,7 @@ enum MenuBar {
       }
       return true
     }
-    image.isTemplate = level == .ok && parts.allSatisfy { $0.heat == 0 && $0.under.allSatisfy { $0.heat == 0 } }
+    image.isTemplate = parts.allSatisfy { $0.heat == 0 && $0.under.allSatisfy { $0.heat == 0 } }
     image.cacheMode = .never  // redraw when the menu bar flips between light and dark
     return image
   }
