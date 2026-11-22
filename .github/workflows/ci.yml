@@ -6,7 +6,7 @@ on:
 
 jobs:
   mac:
-    runs-on: macos-15
+    runs-on: macos-26  # Xcode 26: the macOS 26 SDK has NSGlassEffectView
     steps:
       - uses: actions/checkout@v4
       - name: Tests
