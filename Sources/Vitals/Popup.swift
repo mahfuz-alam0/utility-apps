@@ -51,13 +51,16 @@ final class PopupModel: ObservableObject {
 final class PopupController {
   static let width: CGFloat = 360
   static let radius: CGFloat = 20
-  static let inset = EdgeInsets(top: 14, leading: 18, bottom: 14, trailing: 18)
-  /// Detail and settings pages need the full height. The overview is as tall as its rows, measured rather than
-  /// hard-coded: a fixed height drifted when the rows changed, and the overflow ate the top and bottom padding.
+  /// Each page is as tall as its content, and never shorter than the overview the popup opens on. Measured rather
+  /// than hard-coded: fixed heights drifted from the content, leaving empty space or eating the padding.
   func height(_ page: PopupModel.Page) -> CGFloat {
-    guard page == .overview else { return 452 }
-    let overview = Overview(s: monitor.sample, history: monitor.history, model: model) {}.padding(Self.inset).frame(width: Self.width)
-    return NSHostingView(rootView: overview).fittingSize.height
+    func measure(_ page: PopupModel.Page) -> CGFloat {
+      let m = PopupModel()  // not `model`: while a page change is being published, it still holds the old page
+      m.page = page
+      m.health = model.health
+      return NSHostingView(rootView: PopupView(monitor: monitor, prefs: prefs, model: m) {}.frame(width: Self.width)).fittingSize.height
+    }
+    return max(measure(page), measure(.overview))
   }
   /// Rounded corners that stretch to whatever height the page needs.
   private static let mask: NSImage = {
@@ -236,7 +239,8 @@ struct PopupView: View {
           DetailPage(s: s, history: monitor.history, model: model).transition(.move(edge: .trailing).combined(with: .opacity))
         }
       }
-      .padding(PopupController.inset)
+      .padding(.horizontal, 18)
+      .padding(.vertical, 14)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .clipShape(RoundedRectangle(cornerRadius: PopupController.radius, style: .continuous))
