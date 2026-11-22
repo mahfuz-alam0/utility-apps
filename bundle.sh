@@ -5,7 +5,7 @@
 #   ./bundle.sh prompter install      only Prompter, install to /Applications and launch (also: prompter app = .app only)
 #   ./bundle.sh adwall                only Adwall (.app + .dmg); adwall app = .app only; adwall install = .app, install to /Applications and launch
 #   ./bundle.sh borno                 only Borno (Bangla input method .app + .dmg); borno app = .app only; borno install = .app, copy to ~/Library/Input Methods + register
-#   ./bundle.sh vitals                only Vitals (menu-bar CPU temp + RAM .app + .dmg); vitals app = .app only; vitals install = .app, install to /Applications and launch
+#   ./bundle.sh vitals                only Vitals (menu-bar system monitor .app + .dmg); vitals app = .app only; vitals install = .app, install to /Applications and launch
 #   ./bundle.sh                       clipboard + prompter (same as: all)
 set -e
 cd "$(dirname "$0")"
