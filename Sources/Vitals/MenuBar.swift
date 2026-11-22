@@ -8,7 +8,13 @@ struct Part: Equatable {
   var gauge: Gauge?
   var lines: [String] = []  // one line, or two stacked (network up over down)
   var reserve = ""  // widest text this metric usually shows; the slot keeps that width so neighbours don't jiggle
-  var tint: NSColor? = nil  // fixed colour (the temperature's heat); nil follows the menu bar
+  var heat = 0.0  // 0 = menu-bar colour, 0.5 orange, 1 red
+  var under: [Bar] = []  // thin bars under the number: CPU load over memory, stacked under the temperature
+
+  struct Bar: Equatable {
+    var fill: Double
+    var heat = 0.0
+  }
 }
 
 /// The status item is one image: template (system-tinted) normally, drawn in orange/red when macOS reports trouble.
@@ -21,20 +27,26 @@ enum MenuBar {
   static let busy = 1_000.0  // bytes/s above which a network arrow lights up
 
   static func parts(_ s: Sample, _ display: [Metric: Display]) -> [Part] {
-    Metric.allCases.compactMap { metric -> Part? in
+    // CPU load or memory as a gauge only, temperature as a number: their bars go under the number, saving their own slots
+    let stacks = { (m: Metric) in display[m] == .gauge && (display[.temperature] ?? .off).showsValue && s.temperature != nil }
+    return Metric.allCases.compactMap { metric -> Part? in
       let mode = display[metric] ?? .off
       var part: Part
       switch metric {
       case _ where mode == .off: return nil
+      case .load where stacks(.load), .memory where stacks(.memory): return nil
       case .temperature:
         guard let t = s.temperature else { return nil }
-        part = Part(gauge: .thermometer(step(heat(t))), lines: ["\(Int(t.rounded()))°"], reserve: "88°", tint: heatColor(t))
+        part = Part(gauge: .thermometer(step(heat(t))), lines: ["\(Int(t.rounded()))°"], reserve: "88°", heat: tempHeat(t))
+        if stacks(.load), let load = s.load { part.under.append(Part.Bar(fill: step(load.total), heat: loadHeat(load.total))) }
+        if stacks(.memory), let p = s.pressurePercent { part.under.append(Part.Bar(fill: step(Double(p) / 100), heat: memoryHeat(p))) }
       case .load:
         guard let load = s.load else { return nil }
-        part = Part(gauge: .bar(step(load.total)), lines: ["\(Int((load.total * 100).rounded()))%"], reserve: "88%")
+        part = Part(gauge: .bar(step(load.total)), lines: ["\(Int((load.total * 100).rounded()))%"], reserve: "88%",
+                    heat: loadHeat(load.total))
       case .memory:
         guard let p = s.pressurePercent else { return nil }
-        part = Part(gauge: .bar(step(Double(p) / 100)), lines: ["\(p)%"], reserve: "88%")
+        part = Part(gauge: .bar(step(Double(p) / 100)), lines: ["\(p)%"], reserve: "88%", heat: memoryHeat(p))
       case .battery:
         guard let b = s.battery else { return nil }
         part = Part(gauge: .battery(step(Double(b.percent) / 100), symbol: b.powerSymbol), lines: ["\(b.percent)%"], reserve: "88%")
@@ -80,28 +92,58 @@ enum MenuBar {
       let ink: NSColor = level == .critical ? .systemRed : level == .warning ? .systemOrange : dark ? .white : .black
       var x: CGFloat = 0
       for (part, w) in zip(parts, widths) {
-        let color = part.tint ?? ink
+        let color = shade(part.heat, ink: ink)
+        let textX = x + (part.gauge.map { gaugeWidth($0) + gap } ?? 0)
         if let gauge = part.gauge { draw(gauge, x: x, ink: color) }
-        text(part.lines, x: x + (part.gauge.map { gaugeWidth($0) + gap } ?? 0), ink: color)
+        if !part.under.isEmpty {
+          // number over its bars (first on top), the whole stack centred on the digits' cap height
+          let (thick, between) = part.under.count > 1 ? (CGFloat(2.5), CGFloat(1.5)) : (3, 0)
+          let stack = CGFloat(part.under.count) * (thick + between) - between
+          let bottom = ((height - stack - 2 - font.capHeight) / 2).rounded()
+          NSAttributedString(string: part.lines[0], attributes: attributes(font, color))
+            .draw(at: NSPoint(x: textX, y: bottom + stack + 2 + font.descender))
+          for (i, bar) in part.under.enumerated() {
+            let y = bottom + stack - thick - CGFloat(i) * (thick + between)
+            let track = NSRect(x: textX, y: y, width: x + w - textX, height: thick)
+            let ink = shade(bar.heat, ink: ink)
+            ink.withAlphaComponent(0.3).setFill()
+            NSBezierPath(roundedRect: track, xRadius: thick / 2, yRadius: thick / 2).fill()
+            ink.setFill()
+            NSBezierPath(roundedRect: NSRect(x: track.minX, y: y, width: track.width * bar.fill, height: thick), xRadius: thick / 2, yRadius: thick / 2).fill()
+          }
+        } else {
+          text(part.lines, x: textX, ink: color)
+        }
         x += w + spacing
       }
       return true
     }
-    image.isTemplate = level == .ok && parts.allSatisfy { $0.tint == nil }
+    image.isTemplate = level == .ok && parts.allSatisfy { $0.heat == 0 && $0.under.allSatisfy { $0.heat == 0 } }
     image.cacheMode = .never  // redraw when the menu bar flips between light and dark
     return image
   }
 
   // MARK: drawing
 
-  /// Calibrate here. Apple Silicon idles at 35–50 °C, runs 60–85 °C under load and 90+ °C when pushed hard.
-  static func heatColor(_ celsius: Double) -> NSColor { celsius < 70 ? .systemGreen : celsius < 90 ? .systemOrange : .systemRed }
+  /// Calibrate here. Plain until 65 °C, orange at 80, red at 95: Apple Silicon idles at 35–50 °C and runs 90+ when pushed.
+  static func tempHeat(_ celsius: Double) -> Double { step((celsius - 65) / 30) }
+  /// Calibrate here. Plain until 60 % CPU load, orange at 80, red at 100.
+  static func loadHeat(_ total: Double) -> Double { step((total - 0.6) / 0.4) }
+  /// Calibrate here. Plain until 50 % memory pressure, orange at 70, red at 90.
+  static func memoryHeat(_ percent: Int) -> Double { step((Double(percent) - 50) / 40) }
+
+  /// Menu-bar colour at 0, blending to orange at 0.5 and red at 1.
+  static func shade(_ heat: Double, ink: NSColor) -> NSColor {
+    if heat <= 0 { return ink }
+    let (from, to, f) = heat < 0.5 ? (ink, NSColor.systemOrange, heat * 2) : (.systemOrange, .systemRed, heat * 2 - 1)
+    return from.blended(withFraction: f, of: to) ?? to
+  }
 
   /// 20 °C empty, 110 °C full: Apple Silicon idles in the 30s–40s and runs 80–100 °C under load.
   static func heat(_ celsius: Double) -> Double { min(max((celsius - 20) / 90, 0), 1) }
 
   /// 5 % steps, so the image only redraws when a gauge visibly moves.
-  private static func step(_ f: Double) -> Double { (min(max(f, 0), 1) * 20).rounded() / 20 }
+  static func step(_ f: Double) -> Double { (min(max(f, 0), 1) * 20).rounded() / 20 }
 
   private static func attributes(_ font: NSFont, _ ink: NSColor) -> [NSAttributedString.Key: Any] {
     [.font: font, .foregroundColor: ink]

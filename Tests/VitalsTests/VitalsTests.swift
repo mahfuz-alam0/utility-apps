@@ -68,18 +68,23 @@ import Testing
   s.battery = Battery(percent: 80, plugged: true)
   s.network = NetRate(up: 0, down: 5000)
   let parts = MenuBar.parts(s, [.temperature: .value, .load: .off, .memory: .gauge, .battery: .both, .network: .value])
-  #expect(parts.count == 4)
-  #expect(parts[0] == Part(lines: ["52°"], reserve: "88°", tint: .systemGreen))
-  #expect(parts[1] == Part(gauge: .bar(0.45)))  // 47 % in 5 % steps
-  #expect(parts[2] == Part(gauge: .battery(0.8, symbol: "powerplug.fill"), lines: ["80%"], reserve: "88%"))
-  #expect(parts[3].gauge == nil && parts[3].lines == ["↑ 0 KB/s", "↓ 5 KB/s"])
+  #expect(parts.count == 3)
+  #expect(parts[0] == Part(lines: ["52°"], reserve: "88°", under: [Part.Bar(fill: 0.45)]))  // memory bar (47 % in 5 % steps) under the temperature
+  #expect(parts[1] == Part(gauge: .battery(0.8, symbol: "powerplug.fill"), lines: ["80%"], reserve: "88%"))
+  #expect(parts[2].gauge == nil && parts[2].lines == ["↑ 0 KB/s", "↓ 5 KB/s"])
+  #expect(MenuBar.parts(s, [.memory: .gauge]) == [Part(gauge: .bar(0.45))])  // no temperature: a bar of its own
+  #expect(MenuBar.tempHeat(52) == 0 && MenuBar.tempHeat(80) == 0.5 && MenuBar.tempHeat(100) == 1)
+  #expect(MenuBar.memoryHeat(47) == 0 && MenuBar.memoryHeat(70) == 0.5 && MenuBar.loadHeat(0.9) == 0.75)
+  s.load = CPULoad(user: 0.6, system: 0.2)
+  #expect(MenuBar.parts(s, [.temperature: .value, .load: .gauge, .memory: .gauge])
+    == [Part(lines: ["52°"], reserve: "88°", under: [Part.Bar(fill: 0.8, heat: 0.5), Part.Bar(fill: 0.45)])])  // load bar on top
   #expect(MenuBar.parts(s, [.network: .both])[0].lines == ["0 KB/s", "5 KB/s"])  // gauge draws the arrows
   #expect(MenuBar.parts(s, [:]).isEmpty)
   s.temperature = nil  // e.g. Intel: the metric drops out instead of showing a blank
   #expect(MenuBar.parts(s, [.temperature: .both]).isEmpty)
-  #expect(!MenuBar.image(parts, level: .ok).isTemplate)  // coloured temperature
-  #expect(MenuBar.image(Array(parts.dropFirst()), level: .ok).isTemplate)
-  #expect(MenuBar.heatColor(75) == .systemOrange && MenuBar.heatColor(95) == .systemRed)
+  #expect(MenuBar.image(parts, level: .ok).isTemplate)  // all normal: plain system look
+  #expect(!MenuBar.image([Part(lines: ["85°"], heat: 0.65)], level: .ok).isTemplate)
+  #expect(!MenuBar.image([Part(lines: ["50°"], under: [Part.Bar(fill: 0.9, heat: 0.5)])], level: .ok).isTemplate)
   #expect(!MenuBar.image(parts, level: .warning).isTemplate)
 }
 

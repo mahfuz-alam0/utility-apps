@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 // MARK: - Window
@@ -9,7 +10,7 @@ final class Panel: NSPanel {
   var onEscape: (() -> Void)?
 
   init() {
-    super.init(contentRect: NSRect(origin: .zero, size: PopupController.size), styleMask: [.borderless, .nonactivatingPanel],
+    super.init(contentRect: NSRect(x: 0, y: 0, width: PopupController.width, height: 452), styleMask: [.borderless, .nonactivatingPanel],
                backing: .buffered, defer: false)
     level = .popUpMenu
     isOpaque = false
@@ -48,17 +49,29 @@ final class PopupModel: ObservableObject {
 
 @MainActor
 final class PopupController {
-  static let size = NSSize(width: 340, height: 452)
+  static let width: CGFloat = 340
   static let radius: CGFloat = 16
-  private static let mask = NSImage(size: size, flipped: false) { rect in
-    NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-    return true
+  /// The overview fits its rows; detail and settings pages need the full height.
+  static func height(_ page: PopupModel.Page, battery: Bool) -> CGFloat {
+    page != .overview ? 452 : battery ? 308 : 257
   }
+  /// Rounded corners that stretch to whatever height the page needs.
+  private static let mask: NSImage = {
+    let side = radius * 2 + 1
+    let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+      NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+      return true
+    }
+    image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+    image.resizingMode = .stretch
+    return image
+  }()
   private let panel = Panel()
   private let model = PopupModel()
   private let monitor: Monitor
   private let prefs: Prefs
   private var closedAt = Date.distantPast
+  private var pages: AnyCancellable?
   var onVisible: ((Bool) -> Void)?
 
   init(monitor: Monitor, prefs: Prefs) {
@@ -69,6 +82,20 @@ final class PopupController {
       guard let self else { return }
       if model.page == .overview { hide() } else { model.go(.overview) }
     }
+    pages = model.$page.dropFirst().removeDuplicates().sink { [weak self] in self?.fit($0) }
+  }
+
+  /// Resize for a page, top edge pinned under the status item.
+  private func fit(_ page: PopupModel.Page) {
+    guard panel.isVisible else { return }
+    var frame = panel.frame
+    let height = Self.height(page, battery: monitor.sample.battery != nil)
+    frame.origin.y += frame.height - height
+    frame.size.height = height
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = 0.22
+      panel.animator().setFrame(frame, display: true)
+    } completionHandler: { [weak panel] in panel?.invalidateShadow() }
   }
 
   /// A click on the status item closes an open popup. If that same click already closed it (the panel lost key
@@ -81,7 +108,9 @@ final class PopupController {
     model.page = .overview
     model.hovered = nil
     model.shown = false
-    let blur = NSVisualEffectView(frame: NSRect(origin: .zero, size: Self.size))
+    let size = NSSize(width: Self.width, height: Self.height(.overview, battery: monitor.sample.battery != nil))
+    let blur = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
+    blur.autoresizingMask = [.width, .height]
     blur.material = .hudWindow
     blur.blendingMode = .behindWindow
     blur.state = .active
@@ -95,8 +124,8 @@ final class PopupController {
 
     // centred under the status item, kept on its screen
     let screen = (anchor.screen ?? NSScreen.main)?.visibleFrame ?? anchor.frame
-    let x = min(max(anchor.frame.midX - Self.size.width / 2, screen.minX + 8), screen.maxX - Self.size.width - 8)
-    panel.setFrame(NSRect(origin: NSPoint(x: x, y: anchor.frame.minY - Self.size.height - 6), size: Self.size), display: true)
+    let x = min(max(anchor.frame.midX - size.width / 2, screen.minX + 8), screen.maxX - size.width - 8)
+    panel.setFrame(NSRect(origin: NSPoint(x: x, y: anchor.frame.minY - size.height - 6), size: size), display: true)
     panel.makeKeyAndOrderFront(nil)
     panel.invalidateShadow()
     onVisible?(true)
@@ -153,8 +182,8 @@ private func around(_ values: [Double], minSpan: Double) -> ClosedRange<Double> 
 
 private func netRange(_ h: History) -> ClosedRange<Double> { 0...max(((h.down + h.up).max() ?? 0) * 1.15, 20_000) }
 
-private func tileShape(_ lit: Bool = false) -> some View {
-  RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(lit ? 0.09 : 0.055))
+private func tileShape() -> some View {
+  RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.055))
     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.07)))
 }
 
@@ -172,7 +201,7 @@ struct PopupView: View {
       LinearGradient(colors: [Color(red: 0.10, green: 0.13, blue: 0.17), Color(red: 0.05, green: 0.06, blue: 0.08)],
                      startPoint: .top, endPoint: .bottom).opacity(0.9)
       // the ambient light takes the colour of the overall verdict
-      RadialGradient(colors: [s.health.level.color.opacity(0.2), .clear], center: .topLeading, startRadius: 0, endRadius: 320)
+      RadialGradient(colors: [s.health.level.color.opacity(0.08), .clear], center: .topLeading, startRadius: 0, endRadius: 320)
       Group {
         switch model.page {
         case .overview:
@@ -186,7 +215,7 @@ struct PopupView: View {
       }
       .padding(14)
     }
-    .frame(width: PopupController.size.width, height: PopupController.size.height)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .clipShape(RoundedRectangle(cornerRadius: PopupController.radius))
     .overlay(RoundedRectangle(cornerRadius: PopupController.radius).strokeBorder(Color.white.opacity(0.1)))
     .foregroundStyle(Color.text1)
@@ -206,88 +235,83 @@ struct Overview: View {
   let close: () -> Void
 
   var body: some View {
-    VStack(spacing: 12) {
+    VStack(spacing: 10) {
       header
-      VStack(spacing: 10) {
-        HStack(spacing: 10) { cpu; memory }
-        HStack(spacing: 10) {
-          if s.battery != nil { battery }
-          network
-        }
+      VStack(spacing: 0) {
+        cpu
+        divider
+        memory
+        if s.battery != nil { divider; battery }
+        divider
+        network
       }
+      .padding(4)
+      .background(tileShape())
       Spacer(minLength: 0)
       footer
     }
   }
 
+  private var divider: some View { Divider().overlay(Color.white.opacity(0.03)).padding(.leading, 50).padding(.trailing, 8) }
+
   private var header: some View {
     let health = s.health
-    return HStack(spacing: 12) {
-      ZStack {
-        Circle().fill(health.level.color.opacity(0.15))
-        Circle().strokeBorder(health.level.color.opacity(0.35), lineWidth: 1)
-        Image(systemName: "waveform.path.ecg").font(.system(size: 17, weight: .semibold)).foregroundStyle(health.level.color)
-      }
-      .frame(width: 40, height: 40)
-      VStack(alignment: .leading, spacing: 2) {
-        Text(health.headline).font(.system(size: 16, weight: .semibold))
+    return HStack(spacing: 10) {
+      Image(systemName: "waveform.path.ecg").font(.system(size: 13, weight: .semibold)).foregroundStyle(health.level.color)
+        .frame(width: 30, height: 30).background(Circle().fill(health.level.color.opacity(0.13)))
+      VStack(alignment: .leading, spacing: 1) {
+        Text(health.headline).font(.system(size: 14, weight: .semibold))
         Text([model.chip, bootDate.map { "up " + uptime(since: $0) }].compactMap { $0 }.joined(separator: " · "))
           .font(.system(size: 11)).foregroundStyle(Color.text2)
       }
       Spacer()
     }
-    .padding(.top, 2)
   }
 
   private var cpu: some View {
-    Card(title: "CPU", symbol: "cpu", tint: .cpuTint, page: .cpu, model: model) {
-      if let t = s.temperature {
-        Big(value: "\(Int(t.rounded()))", unit: "°C")
-      } else {
-        Big(value: s.load.map { "\(Int(($0.total * 100).rounded()))" } ?? "–", unit: "%")
-      }
-      Text(s.temperature == nil ? "Load" : "Load " + (s.load.map { percent($0.total) } ?? "–"))
-        .font(.system(size: 11)).foregroundStyle(Color.text2)
-      let trace = s.temperature == nil ? history.load : history.temperature
-      Trace(values: trace, range: s.temperature == nil ? 0...100 : around(trace, minSpan: 10), color: .cpuTint)
-        .frame(height: 34).padding(.top, 10)
+    let t = s.temperature
+    let load = s.load.map { Int(($0.total * 100).rounded()) }
+    let trace = t == nil ? history.load : history.temperature
+    return VitalRow(symbol: "cpu", title: "CPU", detail: "Load " + (load.map { "\($0)%" } ?? "–"), tint: .cpuTint, page: .cpu, model: model) {
+      Trace(values: trace, range: t == nil ? 0...100 : around(trace, minSpan: 10), color: .cpuTint)
+    } value: {
+      Big(value: t.map { "\(Int($0.rounded()))" } ?? load.map(String.init) ?? "–", unit: t == nil ? "%" : "°C", size: 18)
+        .foregroundStyle(s.thermalLevel == .ok ? Color.text1 : s.thermalLevel.color)
     }
   }
 
   private var memory: some View {
-    Card(title: "Memory", symbol: "memorychip", tint: .memTint, page: .memory, model: model) {
-      HStack(alignment: .firstTextBaseline, spacing: 5) {
-        Big(value: s.pressurePercent.map(String.init) ?? "–", unit: "%")
-        Text("pressure").font(.system(size: 10.5)).foregroundStyle(Color.text3)
-      }
-      Text(s.memory.map { "\(gigabytes($0.used)) of \(gigabytes($0.total))" } ?? "–")
-        .font(.system(size: 11)).foregroundStyle(Color.text2)
+    VitalRow(symbol: "memorychip", title: "Memory", detail: s.memory.map { "\(gigabytes($0.used)) of \(gigabytes($0.total))" } ?? "–",
+             tint: .memTint, page: .memory, model: model) {
       Trace(values: history.pressure, range: 0...100, color: s.memoryLevel == .ok ? .memTint : s.memoryLevel.color)
-        .frame(height: 34).padding(.top, 10)
+    } value: {
+      Big(value: s.pressurePercent.map(String.init) ?? "–", unit: "%", size: 18)
+        .foregroundStyle(s.memoryLevel == .ok ? Color.text1 : s.memoryLevel.color)
     }
   }
 
   private var battery: some View {
     let b = s.battery ?? Battery(percent: 0)
-    return Card(title: "Battery", symbol: b.plugged ? "powerplug.fill" : "battery.75percent", tint: .batTint, page: .battery, model: model) {
-      Big(value: "\(b.percent)", unit: "%")
-      Text(b.status).font(.system(size: 11)).foregroundStyle(Color.text2).lineLimit(1)
+    return VitalRow(symbol: b.plugged ? "powerplug.fill" : "battery.75percent", title: "Battery", detail: b.status,
+                    tint: .batTint, page: .battery, model: model) {
       BatteryGlyph(fraction: Double(b.percent) / 100, symbol: b.powerSymbol, color: s.batteryLevel == .ok ? .batTint : s.batteryLevel.color)
-        .frame(height: 18).padding(.top, 20)
+        .frame(width: 34, height: 15)
+    } value: {
+      Big(value: "\(b.percent)", unit: "%", size: 18).foregroundStyle(s.batteryLevel == .ok ? Color.text1 : s.batteryLevel.color)
     }
   }
 
   private var network: some View {
-    Card(title: "Network", symbol: "arrow.up.arrow.down", tint: .netTint, page: .network, model: model) {
-      VStack(alignment: .leading, spacing: 2) {
-        Rate(symbol: "arrow.down", value: s.network?.down, tint: .netTint)
-        Rate(symbol: "arrow.up", value: s.network?.up, tint: .upTint)
-      }
+    VitalRow(symbol: "arrow.up.arrow.down", title: "Network", detail: "Wi-Fi and wired", tint: .netTint, page: .network, model: model) {
       ZStack {
         Trace(values: history.down, range: netRange(history), color: .netTint)
         Trace(values: history.up, range: netRange(history), color: .upTint, fill: false)
       }
-      .frame(height: 34).padding(.top, 10)
+    } value: {
+      VStack(alignment: .trailing, spacing: 1) {
+        Rate(symbol: "arrow.down", value: s.network?.down, tint: .netTint)
+        Rate(symbol: "arrow.up", value: s.network?.up, tint: .upTint)
+      }
     }
   }
 
@@ -334,34 +358,35 @@ struct BackBar: View {
   }
 }
 
-struct Card<Content: View>: View {
-  let title: String
+/// One vital in the overview list: icon, name and detail, a 5-minute trace, the reading. Click for its page.
+struct VitalRow<Chart: View, Value: View>: View {
   let symbol: String
+  let title: String
+  let detail: String
   let tint: Color
   let page: PopupModel.Page
   @ObservedObject var model: PopupModel
-  @ViewBuilder var content: () -> Content
+  @ViewBuilder var chart: () -> Chart
+  @ViewBuilder var value: () -> Value
 
   var body: some View {
-    let lit = model.hovered == page
     Button { model.go(page) } label: {
-      VStack(alignment: .leading, spacing: 0) {
-        HStack(spacing: 5) {
-          Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(tint)
-          Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.text2)
-          Spacer(minLength: 0)
-          Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.text3)
-            .opacity(lit ? 1 : 0)
+      HStack(spacing: 8) {
+        Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint.opacity(0.85))
+          .frame(width: 30, height: 30).background(Circle().fill(tint.opacity(0.1)))
+        VStack(alignment: .leading, spacing: 1) {
+          Text(title).font(.system(size: 12.5, weight: .medium))
+          Text(detail).font(.system(size: 11)).foregroundStyle(Color.text2).lineLimit(1)
         }
         Spacer(minLength: 6)
-        content()
+        chart().frame(width: 52, height: 22)
+        value().fixedSize().frame(minWidth: 66, alignment: .trailing)  // a long rate takes room from the detail, never wraps
       }
-      .padding(12)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .frame(height: 150)
-      .background(tileShape(lit))
+      .padding(.horizontal, 8)
+      .frame(height: 50)
+      .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(model.hovered == page ? 0.06 : 0)))
       .contentShape(Rectangle())
-      .accessibilityElement(children: .combine)  // VoiceOver reads "CPU, 52 °C, Load 22%"
+      .accessibilityElement(children: .combine)  // VoiceOver reads "CPU, Load 22%, 52 °C"
     }
     .buttonStyle(.plain)
     .onHover { model.hover(page, $0) }
@@ -697,9 +722,9 @@ struct Rate: View {
   let tint: Color
 
   var body: some View {
-    HStack(spacing: 5) {
-      Image(systemName: symbol).font(.system(size: 10, weight: .bold)).foregroundStyle(tint)
-      Text(value.map(speed) ?? "–").font(.system(size: 15, weight: .semibold, design: .rounded)).monospacedDigit()
+    HStack(spacing: 4) {
+      Image(systemName: symbol).font(.system(size: 8.5, weight: .bold)).foregroundStyle(tint)
+      Text(value.map(speed) ?? "–").font(.system(size: 12, weight: .semibold, design: .rounded)).monospacedDigit()
     }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel((symbol == "arrow.down" ? "Download " : "Upload ") + (value.map(speed) ?? "unknown"))
