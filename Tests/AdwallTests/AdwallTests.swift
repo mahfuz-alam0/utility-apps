@@ -106,33 +106,44 @@ private func startFakeUpstream(hits: Counter) -> Int32 {
   return fd
 }
 
-private func askUdp(_ query: Packet) -> Packet {
-  let fd = socket(AF_INET, SOCK_DGRAM, 0)
-  defer { close(fd) }
-  setTimeouts(fd, seconds: 3)
-  var addr = inetAddress("127.0.0.1", proxyPort)
-  _ = withSockAddr(&addr) { sendto(fd, query, query.count, 0, $0, $1) }
-  var buffer = Packet(repeating: 0, count: 4096)
-  let n = recv(fd, &buffer, buffer.count, 0)
-  return n > 0 ? Array(buffer[0..<n]) : []
+/// Blocking client I/O runs on its own thread. Parked on the cooperative pool (3 threads on a CI runner, with
+/// other tests' work on the rest) it starves the listener's `Task`, and the reply never comes.
+private func offPool(_ work: @escaping @Sendable () -> Packet) async -> Packet {
+  await withCheckedContinuation { done in Thread.detachNewThread { done.resume(returning: work()) } }
 }
 
-private func askTcp(_ query: Packet) -> Packet {
-  let fd = socket(AF_INET, SOCK_STREAM, 0)
-  defer { close(fd) }
-  setTimeouts(fd, seconds: 3)
-  var addr = inetAddress("127.0.0.1", proxyPort)
-  guard withSockAddr(&addr, { connect(fd, $0, $1) }) == 0 else { return [] }
-  let frame = [UInt8(query.count >> 8), UInt8(query.count & 0xFF)] + query
-  _ = frame.withUnsafeBytes { write(fd, $0.baseAddress, frame.count) }
-  var buffer = Packet(repeating: 0, count: 4096)
-  let n = recv(fd, &buffer, buffer.count, 0)
-  return n > 2 ? Array(buffer[2..<n]) : []
+private func askUdp(_ query: Packet) async -> Packet {
+  await offPool {
+    let fd = socket(AF_INET, SOCK_DGRAM, 0)
+    defer { close(fd) }
+    setTimeouts(fd, seconds: 10)
+    var addr = inetAddress("127.0.0.1", proxyPort)
+    _ = withSockAddr(&addr) { sendto(fd, query, query.count, 0, $0, $1) }
+    var buffer = Packet(repeating: 0, count: 4096)
+    let n = recv(fd, &buffer, buffer.count, 0)
+    return n > 0 ? Array(buffer[0..<n]) : []
+  }
 }
 
-private func rcode(_ response: Packet) -> Int { Int(response[3] & 0xF) }
-private func answerCount(_ response: Packet) -> Int { Int(response[6]) << 8 | Int(response[7]) }
-private func id(_ response: Packet) -> Int { Int(response[0]) << 8 | Int(response[1]) }
+private func askTcp(_ query: Packet) async -> Packet {
+  await offPool {
+    let fd = socket(AF_INET, SOCK_STREAM, 0)
+    defer { close(fd) }
+    setTimeouts(fd, seconds: 10)
+    var addr = inetAddress("127.0.0.1", proxyPort)
+    guard withSockAddr(&addr, { connect(fd, $0, $1) }) == 0 else { return [] }
+    let frame = [UInt8(query.count >> 8), UInt8(query.count & 0xFF)] + query
+    _ = frame.withUnsafeBytes { write(fd, $0.baseAddress, frame.count) }
+    var buffer = Packet(repeating: 0, count: 4096)
+    let n = recv(fd, &buffer, buffer.count, 0)
+    return n > 2 ? Array(buffer[2..<n]) : []
+  }
+}
+
+// -1 for a missing or short reply: a failed expectation, not an index-out-of-range crash of the whole test run.
+private func rcode(_ response: Packet) -> Int { response.count >= 12 ? Int(response[3] & 0xF) : -1 }
+private func answerCount(_ response: Packet) -> Int { response.count >= 12 ? Int(response[6]) << 8 | Int(response[7]) : -1 }
+private func id(_ response: Packet) -> Int { response.count >= 12 ? Int(response[0]) << 8 | Int(response[1]) : -1 }
 
 @Test func dnsProxyBlocksForwardsCachesAndSpeaksTcp() async throws {
   let hits = Counter()
@@ -147,8 +158,8 @@ private func id(_ response: Packet) -> Int { Int(response[0]) << 8 | Int(respons
 
   // blocked names and subdomains get NXDOMAIN without touching upstream
   var before = hits.count
-  let direct = askUdp(buildQuery("ads.example.com"))
-  let nested = askUdp(buildQuery("x.y.tracker.net", type: 28))
+  let direct = await askUdp(buildQuery("ads.example.com"))
+  let nested = await askUdp(buildQuery("x.y.tracker.net", type: 28))
   #expect(rcode(direct) == 3)
   #expect(id(direct) == 7)
   #expect(rcode(nested) == 3)
@@ -156,25 +167,25 @@ private func id(_ response: Packet) -> Int { Int(response[0]) << 8 | Int(respons
 
   // allowed names are forwarded once, then served from cache with the new query id
   before = hits.count
-  let first = askUdp(buildQuery("example.org", id: 11))
-  let second = askUdp(buildQuery("example.org", id: 12))
+  let first = await askUdp(buildQuery("example.org", id: 11))
+  let second = await askUdp(buildQuery("example.org", id: 12))
   #expect(rcode(first) == 0 && answerCount(first) == 1)
   #expect(id(second) == 12 && answerCount(second) == 1)
   #expect(hits.count == before + 1)
 
   // allowlist beats a blocked parent
-  #expect(answerCount(askUdp(buildQuery("safe.tracker.net"))) == 1)
+  #expect(await answerCount(askUdp(buildQuery("safe.tracker.net"))) == 1)
 
   // tcp is filtered and forwarded too
-  #expect(rcode(askTcp(buildQuery("ads.example.com"))) == 3)
-  #expect(answerCount(askTcp(buildQuery("tcp.example.org"))) == 1)
+  #expect(await rcode(askTcp(buildQuery("ads.example.com"))) == 3)
+  #expect(await answerCount(askTcp(buildQuery("tcp.example.org"))) == 1)
 
   // pausing disables blocking; the health name is always answered locally
   await service.setEnabled(false)
-  #expect(answerCount(askUdp(buildQuery("ads.example.com"))) == 1)
+  #expect(await answerCount(askUdp(buildQuery("ads.example.com"))) == 1)
   await service.setEnabled(true)
   before = hits.count
-  #expect(rcode(askUdp(buildQuery(healthName))) == 3)
+  #expect(await rcode(askUdp(buildQuery(healthName))) == 3)
   #expect(hits.count == before)
 
   let stats = await service.stats
