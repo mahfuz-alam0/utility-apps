@@ -67,6 +67,9 @@ final class Monitor: ObservableObject {
   private let cpu = CPUMeter()
   private let net = NetMeter()
   private var battery = Battery.current()
+  private var timer: Timer?
+  /// Why sampling is paused: the Mac asleep, its displays off, or another user's session in front. Empty = running.
+  private var holds = Set<Notification.Name>()
 
   func start() {
     // macOS calls back on every power-source change, so the battery is never polled.
@@ -76,11 +79,35 @@ final class Monitor: ObservableObject {
     }, context)?.takeRetainedValue() {
       CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
     }
+    // Nobody sees the menu bar then, so stop sampling until it's back. Logging out quits the app anyway.
+    let center = NSWorkspace.shared.notificationCenter
+    for (stop, go) in [(NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification),
+                       (NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification),
+                       (NSWorkspace.sessionDidResignActiveNotification, NSWorkspace.sessionDidBecomeActiveNotification)] {
+      center.addObserver(forName: stop, object: nil, queue: .main) { _ in MainActor.assumeIsolated { self.hold(stop, true) } }
+      center.addObserver(forName: go, object: nil, queue: .main) { _ in MainActor.assumeIsolated { self.hold(stop, false) } }
+    }
+    run()
+  }
+
+  private func hold(_ reason: Notification.Name, _ on: Bool) {
+    if on { holds.insert(reason) } else { holds.remove(reason) }
+    if !holds.isEmpty {
+      timer?.invalidate()
+      timer = nil
+    } else if timer == nil {
+      history = History()  // the charts read "last 5 min": don't join them across the gap
+      run()
+    }
+  }
+
+  private func run() {
     refresh()
     // .common mode keeps the numbers live while a control in the popup is being tracked
     let timer = Timer(timeInterval: Self.interval, repeats: true) { _ in MainActor.assumeIsolated { self.refresh() } }
     timer.tolerance = 0.5
     RunLoop.main.add(timer, forMode: .common)
+    self.timer = timer
   }
 
   private func refresh() {

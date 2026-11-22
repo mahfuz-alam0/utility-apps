@@ -118,7 +118,16 @@ final class PopupController {
       glass.cornerRadius = Self.radius
       glass.appearance = NSAppearance(named: .darkAqua)
       glass.contentView = host
-      panel.contentView = glass
+      glass.autoresizingMask = [.width, .height]
+      // The glass alone leaves the window's alpha square, so macOS traced a square shadow with a dark rim around the
+      // round glass. A clipping layer of the same shape makes the window round, and its shadow with it.
+      let root = NSView(frame: host.frame)
+      root.wantsLayer = true
+      root.layer?.cornerRadius = Self.radius
+      root.layer?.cornerCurve = .continuous
+      root.layer?.masksToBounds = true
+      root.addSubview(glass)
+      panel.contentView = root
     } else {
       let blur = NSVisualEffectView(frame: host.frame)
       blur.material = .hudWindow
@@ -135,7 +144,8 @@ final class PopupController {
     let x = min(max(anchor.frame.midX - size.width / 2, screen.minX + 8), screen.maxX - size.width - 8)
     panel.setFrame(NSRect(origin: NSPoint(x: x, y: anchor.frame.minY - size.height - 6), size: size), display: true)
     panel.makeKeyAndOrderFront(nil)
-    panel.invalidateShadow()
+    // next turn, once the new content is committed: traced now, the shadow follows whatever the window last showed
+    DispatchQueue.main.async { [weak panel] in panel?.invalidateShadow() }
     onVisible?(true)
   }
 
@@ -226,12 +236,11 @@ struct PopupView: View {
       .padding(.vertical, 14)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .clipShape(RoundedRectangle(cornerRadius: PopupController.radius))
-    .overlay(RoundedRectangle(cornerRadius: PopupController.radius).strokeBorder(Color.white.opacity(0.1)))
+    .clipShape(RoundedRectangle(cornerRadius: PopupController.radius, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: PopupController.radius, style: .continuous).strokeBorder(Color.white.opacity(0.1)))
     .foregroundStyle(Color.text1)
     .environment(\.colorScheme, .dark)
-    .scaleEffect(model.shown ? 1 : 0.97, anchor: .top)
-    .opacity(model.shown ? 1 : 0)
+    .opacity(model.shown ? 1 : 0)  // fade only: scaling would pull the edge and border off the glass, which doesn't scale
     .onAppear { withAnimation(.easeOut(duration: 0.16)) { model.shown = true } }
   }
 }
