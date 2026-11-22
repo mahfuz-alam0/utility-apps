@@ -306,6 +306,11 @@ struct Overview: View {
         .buttonStyle(Pill())
         .help("Settings")
         .accessibilityLabel("Settings")
+      Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }
+        .buttonStyle(Pill())
+        .keyboardShortcut("q")
+        .help("Quit Vitals (⌘Q)")
+        .accessibilityLabel("Quit Vitals")
     }
   }
 }

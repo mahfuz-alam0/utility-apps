@@ -2,8 +2,9 @@ import AppKit
 import Combine
 
 // Menu-bar vitals, e.g. "52° 47%": CPU temperature, memory pressure, and optionally CPU load, battery and network,
-// each as a number, a gauge or both. Click for the popup. Orange/red when macOS itself reports thermal throttling,
-// memory pressure or a low battery, so the warning follows the system's verdict, not a guessed threshold.
+// each as a number, a gauge or both. Click for the popup. The temperature is coloured by heat (green/orange/red). The rest
+// turns orange/red when macOS itself reports thermal throttling, memory pressure or a low battery, so that warning
+// follows the system's verdict, not a guessed threshold.
 
 @MainActor
 private final class App: NSObject, NSApplicationDelegate {

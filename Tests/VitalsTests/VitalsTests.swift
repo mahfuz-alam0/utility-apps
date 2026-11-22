@@ -69,15 +69,17 @@ import Testing
   s.network = NetRate(up: 0, down: 5000)
   let parts = MenuBar.parts(s, [.temperature: .value, .load: .off, .memory: .gauge, .battery: .both, .network: .value])
   #expect(parts.count == 4)
-  #expect(parts[0] == Part(lines: ["52°"], reserve: "88°"))
-  #expect(parts[1] == Part(gauge: .ring(0.45)))  // 47 % in 5 % steps
+  #expect(parts[0] == Part(lines: ["52°"], reserve: "88°", tint: .systemGreen))
+  #expect(parts[1] == Part(gauge: .bar(0.45)))  // 47 % in 5 % steps
   #expect(parts[2] == Part(gauge: .battery(0.8, symbol: "powerplug.fill"), lines: ["80%"], reserve: "88%"))
   #expect(parts[3].gauge == nil && parts[3].lines == ["↑ 0 KB/s", "↓ 5 KB/s"])
   #expect(MenuBar.parts(s, [.network: .both])[0].lines == ["0 KB/s", "5 KB/s"])  // gauge draws the arrows
   #expect(MenuBar.parts(s, [:]).isEmpty)
   s.temperature = nil  // e.g. Intel: the metric drops out instead of showing a blank
   #expect(MenuBar.parts(s, [.temperature: .both]).isEmpty)
-  #expect(MenuBar.image(parts, level: .ok).isTemplate)
+  #expect(!MenuBar.image(parts, level: .ok).isTemplate)  // coloured temperature
+  #expect(MenuBar.image(Array(parts.dropFirst()), level: .ok).isTemplate)
+  #expect(MenuBar.heatColor(75) == .systemOrange && MenuBar.heatColor(95) == .systemRed)
   #expect(!MenuBar.image(parts, level: .warning).isTemplate)
 }
 
@@ -101,11 +103,11 @@ import Testing
   let store = UserDefaults(suiteName: name)!
   defer { store.removePersistentDomain(forName: name) }
   let first = Prefs(store: store)
-  #expect(first[.temperature] == .value && first[.memory] == .value && first[.network] == .off)
+  #expect(first[.temperature] == .value && first[.memory] == .gauge && first[.network] == .off)
   first[.network] = .both
   first[.temperature] = .off
   let second = Prefs(store: store)
-  #expect(second[.network] == .both && second[.temperature] == .off && second[.memory] == .value)
+  #expect(second[.network] == .both && second[.temperature] == .off && second[.memory] == .gauge)
 }
 
 @Test func sensorsReadOnThisMac() {

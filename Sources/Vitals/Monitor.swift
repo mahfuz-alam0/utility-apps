@@ -134,7 +134,7 @@ enum Display: Int, CaseIterable, Identifiable {
 /// Persisted in UserDefaults. Plain @Published + didSet: the Command Line Tools SDK can't expand SwiftUI's macros.
 @MainActor
 final class Prefs: ObservableObject {
-  static let standard: [Metric: Display] = [.temperature: .value, .memory: .value]  // "52° 47%"
+  static let standard: [Metric: Display] = [.temperature: .value, .memory: .gauge]  // "52°" + memory bar
   private let store: UserDefaults
 
   @Published var display: [Metric: Display] {

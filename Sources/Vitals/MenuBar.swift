@@ -3,11 +3,12 @@ import AppKit
 /// One metric in the menu bar: an optional gauge followed by its number(s).
 struct Part: Equatable {
   enum Gauge: Equatable {
-    case thermometer(Double), bar(Double), ring(Double), battery(Double, symbol: String?), arrows(up: Bool, down: Bool)
+    case thermometer(Double), bar(Double), battery(Double, symbol: String?), arrows(up: Bool, down: Bool)
   }
   var gauge: Gauge?
   var lines: [String] = []  // one line, or two stacked (network up over down)
   var reserve = ""  // widest text this metric usually shows; the slot keeps that width so neighbours don't jiggle
+  var tint: NSColor? = nil  // fixed colour (the temperature's heat); nil follows the menu bar
 }
 
 /// The status item is one image: template (system-tinted) normally, drawn in orange/red when macOS reports trouble.
@@ -15,7 +16,7 @@ enum MenuBar {
   static let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
   static let small = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
   static let height: CGFloat = 22
-  static let spacing: CGFloat = 9  // between metrics
+  static let spacing: CGFloat = 5  // between metrics
   static let gap: CGFloat = 3  // between a gauge and its number
   static let busy = 1_000.0  // bytes/s above which a network arrow lights up
 
@@ -27,13 +28,13 @@ enum MenuBar {
       case _ where mode == .off: return nil
       case .temperature:
         guard let t = s.temperature else { return nil }
-        part = Part(gauge: .thermometer(step(heat(t))), lines: ["\(Int(t.rounded()))°"], reserve: "88°")
+        part = Part(gauge: .thermometer(step(heat(t))), lines: ["\(Int(t.rounded()))°"], reserve: "88°", tint: heatColor(t))
       case .load:
         guard let load = s.load else { return nil }
         part = Part(gauge: .bar(step(load.total)), lines: ["\(Int((load.total * 100).rounded()))%"], reserve: "88%")
       case .memory:
         guard let p = s.pressurePercent else { return nil }
-        part = Part(gauge: .ring(step(Double(p) / 100)), lines: ["\(p)%"], reserve: "88%")
+        part = Part(gauge: .bar(step(Double(p) / 100)), lines: ["\(p)%"], reserve: "88%")
       case .battery:
         guard let b = s.battery else { return nil }
         part = Part(gauge: .battery(step(Double(b.percent) / 100), symbol: b.powerSymbol), lines: ["\(b.percent)%"], reserve: "88%")
@@ -74,20 +75,27 @@ enum MenuBar {
     let widths = parts.map(width)
     let total = widths.reduce(0, +) + spacing * CGFloat(max(parts.count - 1, 0))
     let image = NSImage(size: NSSize(width: max(total, 1), height: height), flipped: false) { _ in
-      let ink: NSColor = level == .critical ? .systemRed : level == .warning ? .systemOrange : .black
+      // runs at draw time, so a non-template image still matches a light or dark menu bar
+      let dark = NSAppearance.currentDrawing().bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+      let ink: NSColor = level == .critical ? .systemRed : level == .warning ? .systemOrange : dark ? .white : .black
       var x: CGFloat = 0
       for (part, w) in zip(parts, widths) {
-        if let gauge = part.gauge { draw(gauge, x: x, ink: ink) }
-        text(part.lines, x: x + (part.gauge.map { gaugeWidth($0) + gap } ?? 0), ink: ink)
+        let color = part.tint ?? ink
+        if let gauge = part.gauge { draw(gauge, x: x, ink: color) }
+        text(part.lines, x: x + (part.gauge.map { gaugeWidth($0) + gap } ?? 0), ink: color)
         x += w + spacing
       }
       return true
     }
-    image.isTemplate = level == .ok
+    image.isTemplate = level == .ok && parts.allSatisfy { $0.tint == nil }
+    image.cacheMode = .never  // redraw when the menu bar flips between light and dark
     return image
   }
 
   // MARK: drawing
+
+  /// Calibrate here. Apple Silicon idles at 35–50 °C, runs 60–85 °C under load and 90+ °C when pushed hard.
+  static func heatColor(_ celsius: Double) -> NSColor { celsius < 70 ? .systemGreen : celsius < 90 ? .systemOrange : .systemRed }
 
   /// 20 °C empty, 110 °C full: Apple Silicon idles in the 30s–40s and runs 80–100 °C under load.
   static func heat(_ celsius: Double) -> Double { min(max((celsius - 20) / 90, 0), 1) }
@@ -114,7 +122,6 @@ enum MenuBar {
     switch g {
     case .thermometer: 7
     case .bar: 5
-    case .ring: 13
     case .battery: 23
     case .arrows: 7
     }
@@ -157,21 +164,6 @@ enum MenuBar {
       // the bulb is always full; the tube above it fills with the level
       let tube = bulb.maxY - 1.5
       fill(shape, upTo: tube + (mid + 7.5 - tube) * f, ink: ink)
-
-    case .ring(let f):
-      let center = NSPoint(x: x + 6.5, y: mid)
-      let track = NSBezierPath()
-      track.appendArc(withCenter: center, radius: 5.25, startAngle: 0, endAngle: 360)
-      track.lineWidth = 2.5
-      ink.withAlphaComponent(0.3).setStroke()
-      track.stroke()
-      guard f > 0 else { return }
-      let arc = NSBezierPath()
-      arc.appendArc(withCenter: center, radius: 5.25, startAngle: 90, endAngle: 90 - 360 * f, clockwise: true)
-      arc.lineWidth = 2.5
-      arc.lineCapStyle = .round
-      ink.setStroke()
-      arc.stroke()
 
     case .battery(let f, let symbolName):
       let body = NSRect(x: x + 0.5, y: mid - 5, width: 20, height: 10)
