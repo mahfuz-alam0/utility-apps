@@ -51,9 +51,13 @@ final class PopupModel: ObservableObject {
 final class PopupController {
   static let width: CGFloat = 360
   static let radius: CGFloat = 20
-  /// The overview fits its rows; detail and settings pages need the full height.
-  static func height(_ page: PopupModel.Page, battery: Bool) -> CGFloat {
-    page != .overview ? 452 : battery ? 308 : 257
+  static let inset = EdgeInsets(top: 14, leading: 18, bottom: 14, trailing: 18)
+  /// Detail and settings pages need the full height. The overview is as tall as its rows, measured rather than
+  /// hard-coded: a fixed height drifted when the rows changed, and the overflow ate the top and bottom padding.
+  func height(_ page: PopupModel.Page) -> CGFloat {
+    guard page == .overview else { return 452 }
+    let overview = Overview(s: monitor.sample, history: monitor.history, model: model) {}.padding(Self.inset).frame(width: Self.width)
+    return NSHostingView(rootView: overview).fittingSize.height
   }
   /// Rounded corners that stretch to whatever height the page needs.
   private static let mask: NSImage = {
@@ -89,7 +93,7 @@ final class PopupController {
   private func fit(_ page: PopupModel.Page) {
     guard panel.isVisible else { return }
     var frame = panel.frame
-    let height = Self.height(page, battery: monitor.sample.battery != nil)
+    let height = self.height(page)
     frame.origin.y += frame.height - height
     frame.size.height = height
     NSAnimationContext.runAnimationGroup { context in
@@ -108,7 +112,7 @@ final class PopupController {
     model.page = .overview
     model.hovered = nil
     model.shown = false
-    let size = NSSize(width: Self.width, height: Self.height(.overview, battery: monitor.sample.battery != nil))
+    let size = NSSize(width: Self.width, height: height(.overview))
     let host = NSHostingView(rootView: PopupView(monitor: monitor, prefs: prefs, model: model) { [weak self] in self?.hide() })
     host.frame = NSRect(origin: .zero, size: size)
     host.autoresizingMask = [.width, .height]
@@ -232,8 +236,7 @@ struct PopupView: View {
           DetailPage(s: s, history: monitor.history, model: model).transition(.move(edge: .trailing).combined(with: .opacity))
         }
       }
-      .padding(.horizontal, 18)
-      .padding(.vertical, 14)
+      .padding(PopupController.inset)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .clipShape(RoundedRectangle(cornerRadius: PopupController.radius, style: .continuous))
