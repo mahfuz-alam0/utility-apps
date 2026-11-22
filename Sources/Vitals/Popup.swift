@@ -197,6 +197,7 @@ func heated(_ calm: Color, _ heat: Double) -> Color { Color(nsColor: MenuBar.sha
 extension Sample {
   var cpuHeat: Double { temperature.map(MenuBar.tempHeat) ?? MenuBar.loadHeat(load?.total ?? 0) }
   var memoryHeat: Double { MenuBar.memoryHeat(pressurePercent ?? 0) }
+  var batteryHeat: Double { battery.map { $0.plugged ? 0 : MenuBar.batteryHeat($0.percent) } ?? 0 }
 }
 
 private func percent(_ fraction: Double) -> String { "\(Int((fraction * 100).rounded()))%" }
@@ -320,10 +321,10 @@ struct Overview: View {
     let b = s.battery ?? Battery(percent: 0)
     return VitalRow(symbol: b.plugged ? "powerplug.fill" : "battery.75percent", title: "Battery", detail: b.status,
                     tint: .batTint, page: .battery, model: model) {
-      BatteryGlyph(fraction: Double(b.percent) / 100, symbol: b.powerSymbol, color: s.batteryLevel == .ok ? .batTint : s.batteryLevel.color)
+      BatteryGlyph(fraction: Double(b.percent) / 100, symbol: b.powerSymbol, color: heated(.batTint, s.batteryHeat))
         .frame(width: 34, height: 15)
     } value: {
-      Big(value: "\(b.percent)", unit: "%", size: 18).foregroundStyle(s.batteryLevel == .ok ? Color.text1 : s.batteryLevel.color)
+      Big(value: "\(b.percent)", unit: "%", size: 18).foregroundStyle(heated(.text1, s.batteryHeat))
     }
   }
 
@@ -489,7 +490,7 @@ struct DetailPage: View {
             Text(t == nil ? "load" : "hottest core").font(.system(size: 10)).foregroundStyle(Color.text3)
           }
         }
-      }, title: thermal.0, tint: s.thermalLevel == .ok ? .text1 : s.thermalLevel.color,
+      }, title: thermal.0, tint: heated(.text1, s.cpuHeat),
          note: thermal.1 + (t == nil ? " Temperature isn't readable on this Mac." : ""))
 
       if t != nil {
@@ -536,7 +537,7 @@ struct DetailPage: View {
             Text("pressure").font(.system(size: 10)).foregroundStyle(Color.text3)
           }
         }
-      }, title: title, tint: s.memoryLevel == .ok ? .text1 : s.memoryLevel.color, note: note)
+      }, title: title, tint: heated(.text1, s.memoryHeat), note: note)
 
       Tile(title: "\(gigabytes(m.used)) used", note: "of \(gigabytes(m.total))") {
         StackedBar(parts: [(Double(m.app), .memTint), (Double(m.wired), .wiredTint), (Double(m.compressed), .squeezedTint),
@@ -570,7 +571,7 @@ struct DetailPage: View {
     return VStack(spacing: 12) {
       hero(gauge: {
         VStack(spacing: 10) {
-          BatteryGlyph(fraction: Double(b.percent) / 100, symbol: b.powerSymbol, color: s.batteryLevel == .ok ? .batTint : s.batteryLevel.color)
+          BatteryGlyph(fraction: Double(b.percent) / 100, symbol: b.powerSymbol, color: heated(.batTint, s.batteryHeat))
             .frame(width: 88, height: 40)
           Big(value: "\(b.percent)", unit: "%", size: 24)
         }

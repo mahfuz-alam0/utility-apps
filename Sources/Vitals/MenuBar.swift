@@ -50,7 +50,7 @@ enum MenuBar {
       case .battery:
         guard let b = s.battery else { return nil }
         part = Part(gauge: .battery(step(Double(b.percent) / 100), symbol: b.powerSymbol), lines: ["\(b.percent)%"], reserve: "88%",
-                    heat: Double(s.batteryLevel.rawValue) / 2)  // low battery: orange at 10 %, red at 5 %
+                    heat: s.batteryHeat)
       case .network:
         let n = s.network ?? NetRate()
         let arrows = mode.showsGauge ? ["", ""] : ["↑ ", "↓ "]  // the gauge already draws the arrows
@@ -117,12 +117,14 @@ enum MenuBar {
 
   // MARK: drawing
 
-  /// Calibrate here. Plain until 65 °C, orange at 80, red at 95: Apple Silicon idles at 35–50 °C and runs 90+ when pushed.
-  static func tempHeat(_ celsius: Double) -> Double { step((celsius - 65) / 30) }
+  /// Calibrate here. Plain until 50 °C, orange at 65, red at 80: Apple Silicon idles at 35–50 °C.
+  static func tempHeat(_ celsius: Double) -> Double { step((celsius - 50) / 30) }
   /// Calibrate here. Plain until 60 % CPU load, orange at 80, red at 100.
   static func loadHeat(_ total: Double) -> Double { step((total - 0.6) / 0.4) }
   /// Calibrate here. Plain until 50 % memory pressure, orange at 70, red at 90.
   static func memoryHeat(_ percent: Int) -> Double { step((Double(percent) - 50) / 40) }
+  /// Calibrate here. Plain above 15 % charge, orange at 10, red at 5 (callers skip this while plugged in).
+  static func batteryHeat(_ percent: Int) -> Double { step((15 - Double(percent)) / 10) }
 
   /// Menu-bar colour at 0, blending to orange at 0.5 and red at 1.
   static func shade(_ heat: Double, ink: NSColor) -> NSColor {

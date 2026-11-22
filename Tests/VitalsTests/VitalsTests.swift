@@ -63,21 +63,21 @@ import Testing
 
 @Test func menuBarFollowsDisplayModes() {
   var s = Sample()
-  s.temperature = 52.4
+  s.temperature = 48.4
   s.pressurePercent = 47
   s.battery = Battery(percent: 80, plugged: true)
   s.network = NetRate(up: 0, down: 5000)
   let parts = MenuBar.parts(s, [.temperature: .value, .load: .off, .memory: .gauge, .battery: .both, .network: .value])
   #expect(parts.count == 3)
-  #expect(parts[0] == Part(lines: ["52°"], reserve: "88°", under: [Part.Bar(fill: 0.45)]))  // memory bar (47 % in 5 % steps) under the temperature
+  #expect(parts[0] == Part(lines: ["48°"], reserve: "88°", under: [Part.Bar(fill: 0.45)]))  // memory bar (47 % in 5 % steps) under the temperature
   #expect(parts[1] == Part(gauge: .battery(0.8, symbol: "powerplug.fill"), lines: ["80%"], reserve: "88%"))  // plugged in: never tinted
   #expect(parts[2].gauge == nil && parts[2].lines == ["↑ 0 KB/s", "↓ 5 KB/s"])
   #expect(MenuBar.parts(s, [.memory: .gauge]) == [Part(gauge: .bar(0.45))])  // no temperature: a bar of its own
-  #expect(MenuBar.tempHeat(52) == 0 && MenuBar.tempHeat(80) == 0.5 && MenuBar.tempHeat(100) == 1)
+  #expect(MenuBar.tempHeat(50) == 0 && MenuBar.tempHeat(65) == 0.5 && MenuBar.tempHeat(80) == 1)
   #expect(MenuBar.memoryHeat(47) == 0 && MenuBar.memoryHeat(70) == 0.5 && MenuBar.loadHeat(0.9) == 0.75)
   s.load = CPULoad(user: 0.6, system: 0.2)
   #expect(MenuBar.parts(s, [.temperature: .value, .load: .gauge, .memory: .gauge])
-    == [Part(lines: ["52°"], reserve: "88°", under: [Part.Bar(fill: 0.8, heat: 0.5), Part.Bar(fill: 0.45)])])  // load bar on top
+    == [Part(lines: ["48°"], reserve: "88°", under: [Part.Bar(fill: 0.8, heat: 0.5), Part.Bar(fill: 0.45)])])  // load bar on top
   #expect(MenuBar.parts(s, [.network: .both])[0].lines == ["0 KB/s", "5 KB/s"])  // gauge draws the arrows
   #expect(MenuBar.parts(s, [:]).isEmpty)
   s.temperature = nil  // e.g. Intel: the metric drops out instead of showing a blank
@@ -85,7 +85,7 @@ import Testing
   #expect(MenuBar.image(parts).isTemplate)  // all normal: plain system look
   #expect(!MenuBar.image([Part(lines: ["85°"], heat: 0.65)]).isTemplate)
   #expect(!MenuBar.image([Part(lines: ["50°"], under: [Part.Bar(fill: 0.9, heat: 0.5)])]).isTemplate)
-  #expect(MenuBar.tempHeat(66) < 0.1 && MenuBar.tempHeat(70) < MenuBar.tempHeat(75))  // creeps in, no jump at one reading
+  #expect(MenuBar.tempHeat(51) < 0.1 && MenuBar.tempHeat(55) < MenuBar.tempHeat(60))  // creeps in, no jump at one reading
 }
 
 @Test func lowBatteryTintsOnlyItsOwnReading() {
@@ -96,8 +96,10 @@ import Testing
   #expect(s.health.headline == "Overheating")
   s.battery = Battery(percent: 4)
   #expect(MenuBar.parts(s, [.battery: .value])[0].heat == 1)
-  s.battery?.percent = 9
+  s.battery?.percent = 10
   #expect(MenuBar.parts(s, [.battery: .value])[0].heat == 0.5)
+  s.battery?.percent = 13
+  #expect(MenuBar.parts(s, [.battery: .value])[0].heat == 0.2)  // creeps in before 10 %, no jump
   s.battery?.plugged = true
   #expect(MenuBar.parts(s, [.battery: .value])[0].heat == 0)
 }
