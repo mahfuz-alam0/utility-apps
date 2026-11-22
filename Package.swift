@@ -13,5 +13,7 @@ let package = Package(
         .testTarget(name: "AdwallTests", dependencies: ["Adwall"]),
         .executableTarget(name: "Borno"),
         .testTarget(name: "BornoTests", dependencies: ["Borno"]),
+        .executableTarget(name: "Vitals"),
+        .testTarget(name: "VitalsTests", dependencies: ["Vitals"]),
     ]
 )

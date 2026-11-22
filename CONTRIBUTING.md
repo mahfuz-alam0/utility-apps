@@ -9,7 +9,7 @@ macOS 14+, Swift toolchain. No other dependencies.
 ```sh
 swift test                       # run before every PR
 swift test --filter PrompterTests
-./bundle.sh <app> app            # build one .app (clipboard | prompter | adwall | borno)
+./bundle.sh <app> app            # build one .app (clipboard | prompter | adwall | borno | vitals)
 ```
 
 CI (`.github/workflows/ci.yml`) runs `swift test` and builds every app on each PR.

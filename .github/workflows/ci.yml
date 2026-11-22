@@ -19,3 +19,5 @@ jobs:
         run: ./bundle.sh adwall app
       - name: Prompter app builds
         run: ./bundle.sh prompter app
+      - name: Vitals app builds
+        run: ./bundle.sh vitals app

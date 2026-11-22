@@ -5,6 +5,7 @@
 #   ./bundle.sh prompter install      only Prompter, install to /Applications and launch (also: prompter app = .app only)
 #   ./bundle.sh adwall                only Adwall (.app + .dmg); adwall app = .app only; adwall install = .app, install to /Applications and launch
 #   ./bundle.sh borno                 only Borno (Bangla input method .app + .dmg); borno app = .app only; borno install = .app, copy to ~/Library/Input Methods + register
+#   ./bundle.sh vitals                only Vitals (menu-bar CPU temp + RAM .app + .dmg); vitals app = .app only; vitals install = .app, install to /Applications and launch
 #   ./bundle.sh                       clipboard + prompter (same as: all)
 set -e
 cd "$(dirname "$0")"
@@ -13,6 +14,7 @@ case "${1:-all}" in
   prompter)  shift; [ $# -eq 0 ] && set -- dmg; [ "$1" = app ] && shift; exec Scripts/prompter/bundle.sh "$@" ;;
   adwall)    shift; exec Scripts/adwall/bundle.sh "$@" ;;
   borno)     shift; exec Scripts/borno/bundle.sh "$@" ;;
+  vitals)    shift; exec Scripts/vitals/bundle.sh "$@" ;;
   all)       Scripts/clipboard/bundle.sh; Scripts/prompter/bundle.sh dmg ;;
-  *)         echo "usage: ./bundle.sh [clipboard|prompter|adwall|borno|all] [args]" >&2; exit 1 ;;
+  *)         echo "usage: ./bundle.sh [clipboard|prompter|adwall|borno|vitals|all] [args]" >&2; exit 1 ;;
 esac
