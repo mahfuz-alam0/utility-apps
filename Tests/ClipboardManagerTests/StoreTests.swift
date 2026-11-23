@@ -28,6 +28,26 @@ import Testing
     #expect(s.items.map(\.text) == ["a"])
 }
 
+@Test func pastedItemMovesToTopOfItsGroup() {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let settings = Settings(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+    settings.maxItems = 5  // at the cap: moving must not trim anything
+
+    let s = ClipStore(dir: dir, settings: settings)
+    ["a", "b", "c", "d", "e"].forEach { s.add(text: $0) }
+    s.moveToTop(s.items[4])
+    #expect(s.items.map(\.text) == ["a", "e", "d", "c", "b"])
+    #expect(ClipStore(dir: dir, settings: settings).items == s.items)  // new order survives restart
+
+    s.togglePin(s.items[3])  // pinned stays above
+    s.moveToTop(s.items[4])
+    #expect(s.items.map(\.text) == ["c", "b", "a", "e", "d"])
+
+    s.moveToTop(ClipItem(text: "😀"))  // emoji: not in history
+    #expect(s.items.count == 5)
+}
+
 @Test func settingsClampMaxItems() {
     let settings = Settings(defaults: UserDefaults(suiteName: UUID().uuidString)!)
     settings.maxItems = -5

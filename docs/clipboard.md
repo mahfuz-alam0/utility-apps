@@ -32,7 +32,7 @@ Menu-bar agent (`LSUIElement`, no Dock icon). One target, one file per component
 | [Emoji.swift](../Sources/ClipboardManager/Emoji.swift) | Emoji list built from `Unicode.Scalar.Properties` |
 | [Paste.swift](../Sources/ClipboardManager/Paste.swift) | Simulated ⌘V via `CGEvent` |
 
-Flow: hotkey → remember frontmost app → caret rect (else mouse) → show panel. Panel is key but the app never activates, so the target app stays frontmost. Enter/click → write item to pasteboard (mark `ownChange`) → hide → 80 ms later post ⌘V.
+Flow: hotkey → remember frontmost app → caret rect (else mouse) → show panel. Panel is key but the app never activates, so the target app stays frontmost. Enter/click → write item to pasteboard (mark `ownChange`) → hide → move item to top of its group → 80 ms later post ⌘V.
 
 Data: `~/Library/Application Support/ClipboardManager/history.json` + `images/*.png`. Cap: Settings → Maximum items (default 25, like Windows; 1–500).
 

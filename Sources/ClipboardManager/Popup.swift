@@ -138,6 +138,7 @@ final class PopupController {
     private func pick(_ item: ClipItem) {
         store.copyToPasteboard(item)
         hide()
+        store.moveToTop(item)  // after hide, so the list doesn't visibly jump
         target?.activate()  // hand key focus back explicitly: the panel took it, ⌘V must land in the target's field
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { Paste.commandV() }  // let focus return first
     }

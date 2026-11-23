@@ -62,6 +62,14 @@ final class ClipStore: ObservableObject {
         insert(it)
     }
 
+    /// A pasted item becomes the newest, same as re-copying it. No-op for emoji, which are not in the history.
+    func moveToTop(_ item: ClipItem) {
+        guard var it = items.first(where: { $0.id == item.id }) else { return }
+        items.removeAll { $0.id == item.id }
+        it.date = Date()
+        insert(it)
+    }
+
     func remove(_ item: ClipItem) {
         deleteFiles(item)
         items.removeAll { $0.id == item.id }
