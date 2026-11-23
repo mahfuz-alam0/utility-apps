@@ -30,15 +30,13 @@ final class Panel: NSPanel {
 /// UI state lives here, not in @State: the Command Line Tools SDK can't expand SwiftUI's @State macro.
 @MainActor
 final class PopupModel: ObservableObject {
-  enum Page: Hashable { case overview, cpu, memory, battery, network, settings }
+  enum Page: Hashable { case overview, cpu, memory, network, settings }
   @Published var page = Page.overview
   @Published var hovered: Page?
   @Published var shown = false
-  var health: Battery.Health?  // read when the battery page opens
   let chip = sysctlString("machdep.cpu.brand_string") ?? "Mac"
 
   func go(_ page: Page) {
-    if page == .battery { health = Battery.health() }
     withAnimation(.snappy(duration: 0.28)) { self.page = page }
   }
 
@@ -57,7 +55,6 @@ final class PopupController {
     func measure(_ page: PopupModel.Page) -> CGFloat {
       let m = PopupModel()  // not `model`: while a page change is being published, it still holds the old page
       m.page = page
-      m.health = model.health
       return NSHostingView(rootView: PopupView(monitor: monitor, prefs: prefs, model: m) {}.frame(width: Self.width)).fittingSize.height
     }
     return max(measure(page), measure(.overview))
@@ -171,7 +168,7 @@ final class PopupController {
 extension Color {
   static let cpuTint = Color(red: 1.0, green: 0.55, blue: 0.38)
   static let memTint = Color(red: 0.38, green: 0.76, blue: 1.0)
-  static let batTint = Color(red: 0.36, green: 0.88, blue: 0.55)
+  static let okTint = Color(red: 0.36, green: 0.88, blue: 0.55)
   static let netTint = Color(red: 1.0, green: 0.78, blue: 0.32)
   static let upTint = Color(red: 0.76, green: 0.66, blue: 1.0)
   static let wiredTint = Color(red: 0.62, green: 0.56, blue: 1.0)
@@ -184,7 +181,7 @@ extension Color {
 extension Level {
   var color: Color {
     switch self {
-    case .ok: .batTint
+    case .ok: .okTint
     case .warning: Color(red: 1.0, green: 0.68, blue: 0.26)
     case .critical: Color(red: 1.0, green: 0.38, blue: 0.38)
     }
@@ -197,7 +194,6 @@ func heated(_ calm: Color, _ heat: Double) -> Color { Color(nsColor: MenuBar.sha
 extension Sample {
   var cpuHeat: Double { temperature.map(MenuBar.tempHeat) ?? MenuBar.loadHeat(load?.total ?? 0) }
   var memoryHeat: Double { MenuBar.memoryHeat(pressurePercent ?? 0) }
-  var batteryHeat: Double { battery.map { $0.plugged ? 0 : MenuBar.batteryHeat($0.percent) } ?? 0 }
 }
 
 private func percent(_ fraction: Double) -> String { "\(Int((fraction * 100).rounded()))%" }
@@ -268,7 +264,6 @@ struct Overview: View {
         cpu
         divider
         memory
-        if s.battery != nil { divider; battery }
         divider
         network
       }
@@ -314,17 +309,6 @@ struct Overview: View {
     } value: {
       Big(value: s.pressurePercent.map(String.init) ?? "–", unit: "%", size: 18)
         .foregroundStyle(heated(.text1, s.memoryHeat))
-    }
-  }
-
-  private var battery: some View {
-    let b = s.battery ?? Battery(percent: 0)
-    return VitalRow(symbol: b.plugged ? "powerplug.fill" : "battery.75percent", title: "Battery", detail: b.status,
-                    tint: .batTint, page: .battery, model: model) {
-      BatteryGlyph(fraction: Double(b.percent) / 100, symbol: b.powerSymbol, color: heated(.batTint, s.batteryHeat))
-        .frame(width: 34, height: 15)
-    } value: {
-      Big(value: "\(b.percent)", unit: "%", size: 18).foregroundStyle(heated(.text1, s.batteryHeat))
     }
   }
 
@@ -442,12 +426,11 @@ struct DetailPage: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      BackBar(title: ["CPU", "Memory", "Battery", "Network"][[PopupModel.Page.cpu, .memory, .battery, .network].firstIndex(of: model.page) ?? 0],
+      BackBar(title: ["CPU", "Memory", "Network"][[PopupModel.Page.cpu, .memory, .network].firstIndex(of: model.page) ?? 0],
               model: model)
       switch model.page {
       case .cpu: cpu
       case .memory: memory
-      case .battery: battery
       default: network
       }
       Spacer(minLength: 0)
@@ -483,7 +466,7 @@ struct DetailPage: View {
     return VStack(spacing: 12) {
       hero(gauge: {
         ZStack {
-          Ring(fraction: t.map(MenuBar.heat) ?? load.total, color: heated(t == nil ? .cpuTint : .batTint, s.cpuHeat))
+          Ring(fraction: t.map(MenuBar.heat) ?? load.total, color: heated(t == nil ? .cpuTint : .okTint, s.cpuHeat))
           VStack(spacing: 0) {
             Big(value: t.map { "\(Int($0.rounded()))" } ?? "\(Int((load.total * 100).rounded()))", unit: t == nil ? "%" : "°C", size: 26)
               .foregroundStyle(heated(.text1, s.cpuHeat))
@@ -563,38 +546,6 @@ struct DetailPage: View {
     }
   }
 
-  // Battery
-
-  private var battery: some View {
-    let b = s.battery ?? Battery(percent: 0)
-    let health = model.health
-    return VStack(spacing: 12) {
-      hero(gauge: {
-        VStack(spacing: 10) {
-          BatteryGlyph(fraction: Double(b.percent) / 100, symbol: b.powerSymbol, color: heated(.batTint, s.batteryHeat))
-            .frame(width: 88, height: 40)
-          Big(value: "\(b.percent)", unit: "%", size: 24)
-        }
-      }, title: b.title, note: b.note)
-
-      Tile {
-        Row(label: "Power source", value: b.plugged ? "Power adapter" : "Battery")
-        Row(label: "Health", value: health?.percent.map { "\($0)%" } ?? "–")
-        Row(label: "Charge cycles", value: health?.cycles.map(String.init) ?? "–")
-        Row(label: "Full charge", value: health.flatMap { h in h.capacity.map { "\($0) of \(h.design.map(String.init) ?? "–") mAh" } } ?? "–")
-        Text(healthNote(health?.percent)).font(.system(size: 11)).foregroundStyle(Color.text2)
-          .fixedSize(horizontal: false, vertical: true).padding(.top, 4)
-      }
-    }
-  }
-
-  private func healthNote(_ p: Int?) -> String {
-    guard let p else { return "This Mac doesn't report battery wear." }
-    return p >= 80
-      ? "Good condition: holds \(p)% of the charge it held when new."
-      : "Worn: holds \(p)% of its original charge. Consider a battery service."
-  }
-
   // Network
 
   private var network: some View {
@@ -623,28 +574,6 @@ struct DetailPage: View {
         .font(.system(size: 10.5)).foregroundStyle(Color.text3).fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-  }
-}
-
-extension Battery {
-  /// Short line for the overview card.
-  var status: String {
-    if charged { return "Fully charged" }
-    if charging { return minutes.map { "\(duration(minutes: $0)) to full" } ?? "Charging" }
-    if plugged { return "Not charging" }
-    return minutes.map { "\(duration(minutes: $0)) left" } ?? "On battery"
-  }
-
-  /// Bolt while charging, plug while on the adapter but holding.
-  var powerSymbol: String? { charging ? "bolt.fill" : plugged ? "powerplug.fill" : nil }
-
-  var title: String { charged ? "Fully charged" : charging ? "Charging" : plugged ? "Not charging" : "On battery" }
-
-  var note: String {
-    if charged { return "Running from the power adapter." }
-    if charging { return minutes.map { "\(duration(minutes: $0)) until full." } ?? "Estimating time until full…" }
-    if plugged { return "On the power adapter. macOS is holding the charge, usually to protect the battery." }
-    return minutes.map { "About \(duration(minutes: $0)) remaining." } ?? "Estimating time remaining…"
   }
 }
 
@@ -740,39 +669,22 @@ struct Rate: View {
 }
 
 struct Tile<Content: View>: View {
-  var title: String?
+  let title: String
   var note: String?
   @ViewBuilder var content: () -> Content
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      if let title {
-        HStack {
-          Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.text2)
-          Spacer()
-          if let note { Text(note).font(.system(size: 10.5)).foregroundStyle(Color.text3).monospacedDigit() }
-        }
+      HStack {
+        Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.text2)
+        Spacer()
+        if let note { Text(note).font(.system(size: 10.5)).foregroundStyle(Color.text3).monospacedDigit() }
       }
       content()
     }
     .padding(12)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(tileShape())
-  }
-}
-
-struct Row: View {
-  let label: String
-  let value: String
-
-  var body: some View {
-    HStack {
-      Text(label).foregroundStyle(Color.text2)
-      Spacer()
-      Text(value).monospacedDigit()
-    }
-    .font(.system(size: 12))
-    .frame(height: 22)
   }
 }
 
@@ -846,37 +758,6 @@ struct Ring: View {
         .animation(.easeOut(duration: 0.6), value: fraction)
     }
     .padding(width / 2)
-  }
-}
-
-struct BatteryGlyph: View {
-  let fraction: Double
-  let symbol: String?
-  let color: Color
-
-  var body: some View {
-    GeometryReader { g in
-      let h = g.size.height
-      let nub = max(2, h * 0.1)
-      let shell = g.size.width - nub - 2
-      let inset = max(2, h * 0.1)
-      let radius = h * 0.28
-      HStack(spacing: 2) {
-        ZStack(alignment: .leading) {
-          RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color.white.opacity(0.3), lineWidth: max(1, h * 0.05))
-          RoundedRectangle(cornerRadius: max(radius - inset, 1.5), style: .continuous)
-            .fill(LinearGradient(colors: [color.opacity(0.75), color], startPoint: .leading, endPoint: .trailing))
-            .frame(width: max(0, (shell - inset * 2) * min(max(fraction, 0), 1)))
-            .padding(inset)
-          if let symbol {
-            Image(systemName: symbol).font(.system(size: h * 0.55, weight: .heavy)).foregroundStyle(.white)
-              .shadow(color: .black.opacity(0.35), radius: 1).frame(maxWidth: .infinity)
-          }
-        }
-        .frame(width: shell)
-        RoundedRectangle(cornerRadius: nub / 2).fill(Color.white.opacity(0.3)).frame(width: nub, height: h * 0.36)
-      }
-    }
   }
 }
 

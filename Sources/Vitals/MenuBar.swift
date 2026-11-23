@@ -3,7 +3,7 @@ import AppKit
 /// One metric in the menu bar: an optional gauge followed by its number(s).
 struct Part: Equatable {
   enum Gauge: Equatable {
-    case thermometer(Double), bar(Double), battery(Double, symbol: String?), arrows(up: Bool, down: Bool)
+    case thermometer(Double), bar(Double), arrows(up: Bool, down: Bool)
   }
   var gauge: Gauge?
   var lines: [String] = []  // one line, or two stacked (network up over down)
@@ -47,10 +47,6 @@ enum MenuBar {
       case .memory:
         guard let p = s.pressurePercent else { return nil }
         part = Part(gauge: .bar(step(Double(p) / 100)), lines: ["\(p)%"], reserve: "88%", heat: memoryHeat(p))
-      case .battery:
-        guard let b = s.battery else { return nil }
-        part = Part(gauge: .battery(step(Double(b.percent) / 100), symbol: b.powerSymbol), lines: ["\(b.percent)%"], reserve: "88%",
-                    heat: s.batteryHeat)
       case .network:
         let n = s.network ?? NetRate()
         let arrows = mode.showsGauge ? ["", ""] : ["↑ ", "↓ "]  // the gauge already draws the arrows
@@ -69,7 +65,6 @@ enum MenuBar {
       s.temperature.map { "CPU \(Int($0.rounded())) °C" },
       s.load.map { "Load \(Int(($0.total * 100).rounded()))%" },
       s.pressurePercent.map { "Memory pressure \($0)%" },
-      s.battery.map { "Battery \($0.percent)%" },
       s.network.map { "↑ \(speed($0.up))  ↓ \(speed($0.down))" },
     ].compactMap { $0 }.joined(separator: " · ")
   }
@@ -123,8 +118,6 @@ enum MenuBar {
   static func loadHeat(_ total: Double) -> Double { step((total - 0.6) / 0.4) }
   /// Calibrate here. Plain until 50 % memory pressure, orange at 70, red at 90.
   static func memoryHeat(_ percent: Int) -> Double { step((Double(percent) - 50) / 40) }
-  /// Calibrate here. Plain above 15 % charge, orange at 10, red at 5 (callers skip this while plugged in).
-  static func batteryHeat(_ percent: Int) -> Double { step((15 - Double(percent)) / 10) }
 
   /// Menu-bar colour at 0, blending to orange at 0.5 and red at 1.
   static func shade(_ heat: Double, ink: NSColor) -> NSColor {
@@ -158,7 +151,6 @@ enum MenuBar {
     switch g {
     case .thermometer: 7
     case .bar: 5
-    case .battery: 23
     case .arrows: 7
     }
   }
@@ -200,27 +192,6 @@ enum MenuBar {
       // the bulb is always full; the tube above it fills with the level
       let tube = bulb.maxY - 1.5
       fill(shape, upTo: tube + (mid + 7.5 - tube) * f, ink: ink)
-
-    case .battery(let f, let symbolName):
-      let body = NSRect(x: x + 0.5, y: mid - 5, width: 20, height: 10)
-      let outline = NSBezierPath(roundedRect: body, xRadius: 3, yRadius: 3)
-      outline.lineWidth = 1
-      ink.withAlphaComponent(0.45).setStroke()
-      outline.stroke()
-      ink.withAlphaComponent(0.45).setFill()
-      NSBezierPath(roundedRect: NSRect(x: body.maxX + 1, y: mid - 2, width: 1.5, height: 4), xRadius: 0.75, yRadius: 0.75).fill()
-      let inner = body.insetBy(dx: 2, dy: 2)
-      ink.setFill()
-      NSBezierPath(roundedRect: NSRect(x: inner.minX, y: inner.minY, width: inner.width * f, height: inner.height), xRadius: 1.5, yRadius: 1.5).fill()
-      guard let symbolName, let glyph = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil) else { return }
-      // knock a halo out of the fill, then draw the glyph, so it reads at any charge level
-      let bolt = symbolName.hasPrefix("bolt")  // the plug is wider, so it gets a smaller glyph and halo
-      for (size, op) in [(CGFloat(bolt ? 11 : 9), NSCompositingOperation.destinationOut), (bolt ? 8 : 6.5, .sourceOver)] {
-        let config = NSImage.SymbolConfiguration(pointSize: size, weight: bolt ? .black : .bold).applying(.init(paletteColors: [ink]))
-        guard let symbol = glyph.withSymbolConfiguration(config) else { continue }
-        let s = symbol.size
-        symbol.draw(in: NSRect(x: body.midX - s.width / 2, y: mid - s.height / 2, width: s.width, height: s.height), from: .zero, operation: op, fraction: 1)
-      }
 
     case .arrows(let up, let down):
       for (lit, top) in [(up, true), (down, false)] {

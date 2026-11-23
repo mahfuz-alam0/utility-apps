@@ -37,17 +37,6 @@ import Testing
   #expect(bytes.tx == 50)
 }
 
-@Test func batteryHealthReadsBothRegistryLayouts() {
-  // recent Apple Silicon: mAh nested in BatteryData, top-level MaxCapacity is a percentage
-  let nested = Battery.Health(registry: [
-    "CycleCount": 52, "MaxCapacity": 100, "BatteryData": ["AppleRawMaxCapacity": 4538, "DesignCapacity": 4629],
-  ])
-  #expect(nested == Battery.Health(cycles: 52, capacity: 4538, design: 4629))
-  #expect(nested.percent == 98)
-  #expect(Battery.Health(registry: ["CycleCount": 300, "MaxCapacity": 5000, "DesignCapacity": 6000]).percent == 83)  // Intel
-  #expect(Battery.Health(registry: ["MaxCapacity": 100, "DesignCapacity": 4629]).percent == nil)  // never 100 mAh
-}
-
 @Test func formatting() {
   #expect(speed(0) == "0 KB/s")
   #expect(speed(340_000) == "340 KB/s")
@@ -55,8 +44,6 @@ import Testing
   #expect(speed(1_234_000) == "1.2 MB/s")
   #expect(speed(150_000_000) == "150 MB/s")
   #expect(speed(2_500_000_000) == "2.5 GB/s")
-  #expect(duration(minutes: 80) == "1h 20m")
-  #expect(duration(minutes: 45) == "45m")
   #expect(uptime(since: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 3 * 86400 + 4 * 3600 + 59)) == "3d 4h")
   #expect(uptime(since: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 5 * 3600 + 12 * 60)) == "5h 12m")
 }
@@ -65,13 +52,11 @@ import Testing
   var s = Sample()
   s.temperature = 48.4
   s.pressurePercent = 47
-  s.battery = Battery(percent: 80, plugged: true)
   s.network = NetRate(up: 0, down: 5000)
-  let parts = MenuBar.parts(s, [.temperature: .value, .load: .off, .memory: .gauge, .battery: .both, .network: .value])
-  #expect(parts.count == 3)
+  let parts = MenuBar.parts(s, [.temperature: .value, .load: .off, .memory: .gauge, .network: .value])
+  #expect(parts.count == 2)
   #expect(parts[0] == Part(lines: ["48°"], reserve: "88°", under: [Part.Bar(fill: 0.45)]))  // memory bar (47 % in 5 % steps) under the temperature
-  #expect(parts[1] == Part(gauge: .battery(0.8, symbol: "powerplug.fill"), lines: ["80%"], reserve: "88%"))  // plugged in: never tinted
-  #expect(parts[2].gauge == nil && parts[2].lines == ["↑ 0 KB/s", "↓ 5 KB/s"])
+  #expect(parts[1].gauge == nil && parts[1].lines == ["↑ 0 KB/s", "↓ 5 KB/s"])
   #expect(MenuBar.parts(s, [.memory: .gauge]) == [Part(gauge: .bar(0.45))])  // no temperature: a bar of its own
   #expect(MenuBar.tempHeat(50) == 0 && MenuBar.tempHeat(65) == 0.5 && MenuBar.tempHeat(80) == 1)
   #expect(MenuBar.memoryHeat(47) == 0 && MenuBar.memoryHeat(70) == 0.5 && MenuBar.loadHeat(0.9) == 0.75)
@@ -88,20 +73,12 @@ import Testing
   #expect(MenuBar.tempHeat(51) < 0.1 && MenuBar.tempHeat(55) < MenuBar.tempHeat(60))  // creeps in, no jump at one reading
 }
 
-@Test func lowBatteryTintsOnlyItsOwnReading() {
+@Test func headlineNamesTheWorstProblem() {
   var s = Sample()
   #expect(s.health.headline == "All vitals normal")
   s.pressure = .warning
   s.thermal = .critical
   #expect(s.health.headline == "Overheating")
-  s.battery = Battery(percent: 4)
-  #expect(MenuBar.parts(s, [.battery: .value])[0].heat == 1)
-  s.battery?.percent = 10
-  #expect(MenuBar.parts(s, [.battery: .value])[0].heat == 0.5)
-  s.battery?.percent = 13
-  #expect(MenuBar.parts(s, [.battery: .value])[0].heat == 0.2)  // creeps in before 10 %, no jump
-  s.battery?.plugged = true
-  #expect(MenuBar.parts(s, [.battery: .value])[0].heat == 0)
 }
 
 @Test @MainActor func prefsPersist() {

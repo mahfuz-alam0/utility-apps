@@ -8,7 +8,7 @@ Small, native macOS utilities. Swift, AppKit + SwiftUI, **zero third-party depen
 | **Prompter** | On-screen script prompter for calls and recordings, hidden from screen sharing. | [docs/prompter.md](docs/prompter.md) |
 | **Adwall** | System-wide ad and tracker blocker (local filtering DNS + menu-bar app). | [docs/adwall.md](docs/adwall.md) |
 | **Borno** | Bangla phonetic keyboard (Avro-style) as a real macOS input method. | [docs/borno.md](docs/borno.md) |
-| **Vitals** | Menu-bar system monitor: CPU temperature and load, memory pressure, battery, network, as numbers or gauges. Click for a popup with live charts and details. | [docs/vitals.md](docs/vitals.md) |
+| **Vitals** | Menu-bar system monitor: CPU temperature and load, memory pressure, network, as numbers or gauges. Click for a popup with live charts and details. | [docs/vitals.md](docs/vitals.md) |
 
 ## Download
 

@@ -1,5 +1,4 @@
 import Foundation
-import IOKit.ps
 
 /// CPU die temperature from the Apple Silicon PMU sensors, read through IOKit's private HID event API (no root needed).
 /// The functions are looked up at runtime, so a macOS that drops them gives nil instead of a crash at launch.
@@ -131,68 +130,6 @@ enum Pressure: Int32 {
     var size = MemoryLayout<Int32>.size
     guard sysctlbyname("kern.memorystatus_level", &level, &size, nil, 0) == 0, (0...100).contains(level) else { return nil }
     return 100 - Int(level)
-  }
-}
-
-struct Battery: Equatable {
-  var percent: Int
-  var plugged = false
-  var charging = false
-  var charged = false
-  var minutes: Int?  // until empty on battery, until full while charging; nil while macOS is still estimating
-
-  /// The internal battery from the public power-sources API; nil on desktops.
-  static func current() -> Battery? {
-    guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-      let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef]
-    else { return nil }
-    for source in list {
-      guard let d = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any],
-        d[kIOPSTypeKey] as? String == kIOPSInternalBatteryType,
-        let now = d[kIOPSCurrentCapacityKey] as? Int, let max = d[kIOPSMaxCapacityKey] as? Int, max > 0
-      else { continue }
-      let charging = d[kIOPSIsChargingKey] as? Bool ?? false
-      let minutes = (charging ? d[kIOPSTimeToFullChargeKey] : d[kIOPSTimeToEmptyKey]) as? Int
-      return Battery(
-        percent: Int((Double(now) / Double(max) * 100).rounded()),
-        plugged: d[kIOPSPowerSourceStateKey] as? String == kIOPSACPowerValue,
-        charging: charging, charged: d[kIOPSIsChargedKey] as? Bool ?? false,
-        minutes: minutes.flatMap { $0 > 0 ? $0 : nil })
-    }
-    return nil
-  }
-
-  struct Health: Equatable {
-    var cycles: Int?
-    var capacity: Int?  // mAh now
-    var design: Int?  // mAh when new
-    var percent: Int? {
-      guard let capacity, let design, design > 0 else { return nil }
-      return min(100, capacity * 100 / design)
-    }
-  }
-
-  /// Wear figures from the battery controller. They change over months, so read on demand, not per tick.
-  static func health() -> Health? {
-    let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
-    guard service != 0 else { return nil }
-    defer { IOObjectRelease(service) }
-    var properties: Unmanaged<CFMutableDictionary>?
-    guard IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
-      let registry = properties?.takeRetainedValue() as? [String: Any]
-    else { return nil }
-    return Health(registry: registry)
-  }
-}
-
-extension Battery.Health {
-  /// Recent macOS keeps the mAh figures inside "BatteryData"; older releases put them at the top level.
-  /// Apple Silicon's top-level MaxCapacity is a percentage (100), so it only counts when it can't be one (Intel: mAh).
-  init(registry: [String: Any]) {
-    let nested = registry["BatteryData"] as? [String: Any] ?? [:]
-    func int(_ key: String) -> Int? { registry[key] as? Int ?? nested[key] as? Int }
-    self.init(cycles: int("CycleCount"), capacity: int("AppleRawMaxCapacity") ?? int("MaxCapacity").flatMap { $0 > 100 ? $0 : nil },
-              design: int("DesignCapacity"))
   }
 }
 

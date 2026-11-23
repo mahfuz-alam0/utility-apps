@@ -1,10 +1,10 @@
 import AppKit
 import Combine
 
-// Menu-bar vitals, e.g. "52° 47%": CPU temperature, memory pressure, and optionally CPU load, battery and network,
+// Menu-bar vitals, e.g. "52° 47%": CPU temperature, memory pressure, and optionally CPU load and network,
 // each as a number, a gauge or both. Click for the popup. Temperature, CPU load and memory each blend from the plain
 // menu-bar colour through orange to red as they climb, so colour creeps in instead of flipping at one reading; CPU load
-// and memory as gauges sit as bars under the temperature. A low battery turns its own reading orange, then red.
+// and memory as gauges sit as bars under the temperature.
 
 @MainActor
 private final class App: NSObject, NSApplicationDelegate {

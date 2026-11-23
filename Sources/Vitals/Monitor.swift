@@ -1,5 +1,4 @@
 import AppKit
-import IOKit.ps
 import ServiceManagement
 
 /// One reading of every sensor. The menu bar and the popup both draw from it, so nothing is sampled twice.
@@ -10,7 +9,6 @@ struct Sample {
   var pressure = Pressure.normal
   var pressurePercent: Int?
   var thermal = ProcessInfo.ThermalState.nominal
-  var battery: Battery?
   var network: NetRate?
 }
 
@@ -23,17 +21,12 @@ extension Sample {
   // Warnings follow macOS's own verdicts (thermal state, memory pressure), not guessed thresholds.
   var thermalLevel: Level { thermal == .critical ? .critical : thermal == .serious ? .warning : .ok }
   var memoryLevel: Level { pressure == .critical ? .critical : pressure == .warning ? .warning : .ok }
-  var batteryLevel: Level {
-    guard let battery, !battery.plugged else { return .ok }
-    return battery.percent <= 5 ? .critical : battery.percent <= 10 ? .warning : .ok
-  }
 
-  /// Worst problem first (heat, then memory, then battery), or all clear.
+  /// Worst problem first (heat, then memory), or all clear.
   var health: (level: Level, headline: String) {
     let problems = [
       (thermalLevel, thermal == .critical ? "Overheating" : "Running hot"),
       (memoryLevel, pressure == .critical ? "Out of memory" : "Memory is tight"),
-      (batteryLevel, "Battery low"),
     ]
     return problems.filter { $0.0 != .ok }.max { $0.0 < $1.0 } ?? (.ok, "All vitals normal")
   }
@@ -66,19 +59,11 @@ final class Monitor: ObservableObject {
   private let thermometer = Thermometer()
   private let cpu = CPUMeter()
   private let net = NetMeter()
-  private var battery = Battery.current()
   private var timer: Timer?
   /// Why sampling is paused: the Mac asleep, its displays off, or another user's session in front. Empty = running.
   private var holds = Set<Notification.Name>()
 
   func start() {
-    // macOS calls back on every power-source change, so the battery is never polled.
-    let context = Unmanaged.passUnretained(self).toOpaque()
-    if let source = IOPSNotificationCreateRunLoopSource({ context in
-      MainActor.assumeIsolated { Unmanaged<Monitor>.fromOpaque(context!).takeUnretainedValue().battery = Battery.current() }
-    }, context)?.takeRetainedValue() {
-      CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-    }
     // Nobody sees the menu bar then, so stop sampling until it's back. Logging out quits the app anyway.
     let center = NSWorkspace.shared.notificationCenter
     for (stop, go) in [(NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification),
@@ -118,7 +103,6 @@ final class Monitor: ObservableObject {
     s.pressure = Pressure.current()
     s.pressurePercent = Pressure.percent()
     s.thermal = ProcessInfo.processInfo.thermalState
-    s.battery = battery
     s.network = net.read()
     history.record(s)
     sample = s
@@ -128,14 +112,13 @@ final class Monitor: ObservableObject {
 // MARK: - Menu-bar preferences
 
 enum Metric: String, CaseIterable, Identifiable {
-  case temperature, load, memory, battery, network
+  case temperature, load, memory, network
   var id: Self { self }
   var title: String {
     switch self {
     case .temperature: "CPU temp"
     case .load: "CPU load"
     case .memory: "Memory"
-    case .battery: "Battery"
     case .network: "Network"
     }
   }
@@ -144,7 +127,6 @@ enum Metric: String, CaseIterable, Identifiable {
     case .temperature: "thermometer.medium"
     case .load: "cpu"
     case .memory: "memorychip"
-    case .battery: "battery.75percent"
     case .network: "arrow.up.arrow.down"
     }
   }
@@ -208,8 +190,6 @@ func speed(_ bytesPerSecond: Double) -> String {
 }
 
 func gigabytes(_ bytes: UInt64) -> String { String(format: "%.1f GB", Double(bytes) / 1_073_741_824) }
-
-func duration(minutes m: Int) -> String { m >= 60 ? "\(m / 60)h \(m % 60)m" : "\(m)m" }
 
 func uptime(since boot: Date, now: Date = Date()) -> String {
   let minutes = max(0, Int(now.timeIntervalSince(boot) / 60))
