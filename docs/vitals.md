@@ -22,7 +22,15 @@ One sampler feeds both the menu bar and the popup, so nothing is read twice.
 
 ## Colour
 
-The menu bar turns orange or red only when macOS itself reports trouble for a metric on screen: CPU slowed for heat (`thermalState` serious or critical), or memory pressure warning or critical. It follows the system's verdict, so there is no threshold to tune. Normal temperatures under load on Apple Silicon run 80–100 °C.
+Each metric tints itself, in the menu bar and in the popup's numbers, blending a little at a time instead of flipping at one reading. Network never tints.
+
+| Metric | Sky blue | Plain | Orange | Red |
+|---|---|---|---|---|
+| CPU temperature | 40 °C and below | 45–50 °C | 60 °C | 70 °C and above |
+| CPU load | – | up to 60 % | 80 % | 100 % |
+| Memory pressure | – | up to 50 % | 70 % | 90 % |
+
+Above 50 °C, temperature mixes in 5 % more of the next colour every 0.5 °C. Thresholds are the "Calibrate here" functions in [MenuBar.swift](../Sources/Vitals/MenuBar.swift). The popup's verdict icon and headline ignore them and follow macOS: thermal state and memory pressure level.
 
 ## Known limitations
 

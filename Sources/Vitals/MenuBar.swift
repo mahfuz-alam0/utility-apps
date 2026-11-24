@@ -8,7 +8,7 @@ struct Part: Equatable {
   var gauge: Gauge?
   var lines: [String] = []  // one line, or two stacked (network up over down)
   var reserve = ""  // widest text this metric usually shows; the slot keeps that width so neighbours don't jiggle
-  var heat = 0.0  // 0 = menu-bar colour, 0.5 orange, 1 red
+  var heat = 0.0  // -0.5 sky blue (cold), 0 = menu-bar colour, 0.5 orange, 1 red
   var under: [Bar] = []  // thin bars under the number: CPU load over memory, stacked under the temperature
 
   struct Bar: Equatable {
@@ -17,7 +17,7 @@ struct Part: Equatable {
   }
 }
 
-/// The status item is one image: template (system-tinted) normally, each metric blending toward orange/red as it climbs.
+/// The status item is one image: template (system-tinted) normally, each metric blending toward orange/red as it climbs (temperature: sky blue when cold).
 enum MenuBar {
   static let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
   static let small = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
@@ -112,16 +112,21 @@ enum MenuBar {
 
   // MARK: drawing
 
-  /// Calibrate here. Plain until 50 °C, orange at 65, red at 80: Apple Silicon idles at 35–50 °C.
-  static func tempHeat(_ celsius: Double) -> Double { step((celsius - 50) / 30) }
+  /// Calibrate here. Sky blue up to 40 °C, fading to plain at 45; plain to 50; then orange at 60 and red from 70,
+  /// every 0.5 °C mixing in 5 % more of the next colour.
+  static func tempHeat(_ celsius: Double) -> Double {
+    let t = (celsius * 2).rounded() / 2
+    return t < 50 ? min(max((t - 45) / 10, -0.5), 0) : min((t - 50) / 20, 1)
+  }
   /// Calibrate here. Plain until 60 % CPU load, orange at 80, red at 100.
   static func loadHeat(_ total: Double) -> Double { step((total - 0.6) / 0.4) }
   /// Calibrate here. Plain until 50 % memory pressure, orange at 70, red at 90.
   static func memoryHeat(_ percent: Int) -> Double { step((Double(percent) - 50) / 40) }
 
-  /// Menu-bar colour at 0, blending to orange at 0.5 and red at 1.
+  /// Menu-bar colour at 0, blending to orange at 0.5 and red at 1, or the other way to sky blue at -0.5.
   static func shade(_ heat: Double, ink: NSColor) -> NSColor {
-    if heat <= 0 { return ink }
+    if heat == 0 { return ink }
+    if heat < 0 { return ink.blended(withFraction: heat * -2, of: .systemCyan) ?? .systemCyan }
     let (from, to, f) = heat < 0.5 ? (ink, NSColor.systemOrange, heat * 2) : (.systemOrange, .systemRed, heat * 2 - 1)
     return from.blended(withFraction: f, of: to) ?? to
   }

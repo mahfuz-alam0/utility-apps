@@ -188,7 +188,7 @@ extension Level {
   }
 }
 
-/// `calm` while a vital is normal, blending through orange to red as it climbs: the menu bar's ramp, so nothing flips at one reading.
+/// `calm` while a vital is normal, blending through orange to red as it climbs (sky blue when cold): the menu bar's ramp, so nothing flips at one reading.
 func heated(_ calm: Color, _ heat: Double) -> Color { Color(nsColor: MenuBar.shade(heat, ink: NSColor(calm))) }
 
 extension Sample {

@@ -58,7 +58,8 @@ import Testing
   #expect(parts[0] == Part(lines: ["48°"], reserve: "88°", under: [Part.Bar(fill: 0.45)]))  // memory bar (47 % in 5 % steps) under the temperature
   #expect(parts[1].gauge == nil && parts[1].lines == ["↑ 0 KB/s", "↓ 5 KB/s"])
   #expect(MenuBar.parts(s, [.memory: .gauge]) == [Part(gauge: .bar(0.45))])  // no temperature: a bar of its own
-  #expect(MenuBar.tempHeat(50) == 0 && MenuBar.tempHeat(65) == 0.5 && MenuBar.tempHeat(80) == 1)
+  #expect([20, 40, 42.5, 45, 50, 60, 70, 95].map(MenuBar.tempHeat) == [-0.5, -0.5, -0.25, 0, 0, 0.5, 1, 1])  // sky blue, plain, orange, red
+  #expect(MenuBar.tempHeat(50.5) == 0.025)  // 0.5 °C = 5 % of a colour
   #expect(MenuBar.memoryHeat(47) == 0 && MenuBar.memoryHeat(70) == 0.5 && MenuBar.loadHeat(0.9) == 0.75)
   s.load = CPULoad(user: 0.6, system: 0.2)
   #expect(MenuBar.parts(s, [.temperature: .value, .load: .gauge, .memory: .gauge])
@@ -69,6 +70,7 @@ import Testing
   #expect(MenuBar.parts(s, [.temperature: .both]).isEmpty)
   #expect(MenuBar.image(parts).isTemplate)  // all normal: plain system look
   #expect(!MenuBar.image([Part(lines: ["85°"], heat: 0.65)]).isTemplate)
+  #expect(!MenuBar.image([Part(lines: ["38°"], heat: -0.5)]).isTemplate)  // cold is tinted too
   #expect(!MenuBar.image([Part(lines: ["50°"], under: [Part.Bar(fill: 0.9, heat: 0.5)])]).isTemplate)
   #expect(MenuBar.tempHeat(51) < 0.1 && MenuBar.tempHeat(55) < MenuBar.tempHeat(60))  // creeps in, no jump at one reading
 }
