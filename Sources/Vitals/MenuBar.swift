@@ -118,8 +118,9 @@ enum MenuBar {
     let t = celsius.rounded()
     return t < 45 ? min(max((t - 35) / 10, -0.5), 0) : min((t - 45) / 25, 1)
   }
-  /// Calibrate here. Plain until 60 % CPU load, orange at 80, red at 100.
-  static func loadHeat(_ total: Double) -> Double { step((total - 0.6) / 0.4) }
+  /// Calibrate here. Plain until 40 % CPU load, orange at 70, red at 100, every 1 % mixing in 1/30 more of the next colour.
+  /// Rounds like the shown number, as tempHeat does.
+  static func loadHeat(_ total: Double) -> Double { min(max(((total * 100).rounded() - 40) / 60, 0), 1) }
   /// Calibrate here. Plain until 50 % memory pressure, orange at 70, red at 90.
   static func memoryHeat(_ percent: Int) -> Double { step((Double(percent) - 50) / 40) }
 

@@ -61,10 +61,12 @@ import Testing
   #expect([20, 30, 32, 35, 45, 57, 58, 70, 95].map(MenuBar.tempHeat) == [-0.5, -0.5, -0.3, 0, 0, 0.48, 0.52, 1, 1])  // sky blue, plain, orange, red
   #expect(MenuBar.tempHeat(46) == 0.04)  // 1 °C = 8 % of a colour
   #expect([45.4, 45.5, 46.4, 46.5].map(MenuBar.tempHeat) == [0, 0.04, 0.04, 0.08])  // one colour per shown number
-  #expect(MenuBar.memoryHeat(47) == 0 && MenuBar.memoryHeat(70) == 0.5 && MenuBar.loadHeat(0.9) == 0.75)
-  s.load = CPULoad(user: 0.6, system: 0.2)
+  let loadSteps = [0, 0.4, 0.404, 0.406, 0.414, 0.42, 0.7, 1].map { (MenuBar.loadHeat($0) * 60).rounded() }
+  #expect(loadSteps == [0, 0, 0, 1, 1, 2, 30, 60])  // plain to 40 %, then one step per shown 1 %: orange at 30, red at 60
+  #expect(MenuBar.memoryHeat(47) == 0 && MenuBar.memoryHeat(70) == 0.5)
+  s.load = CPULoad(user: 0.5, system: 0.2)
   #expect(MenuBar.parts(s, [.temperature: .value, .load: .gauge, .memory: .gauge])
-    == [Part(lines: ["44°"], reserve: "88°", under: [Part.Bar(fill: 0.8, heat: 0.5), Part.Bar(fill: 0.45)])])  // load bar on top
+    == [Part(lines: ["44°"], reserve: "88°", under: [Part.Bar(fill: 0.7, heat: 0.5), Part.Bar(fill: 0.45)])])  // load bar on top
   #expect(MenuBar.parts(s, [.network: .both])[0].lines == ["0 KB/s", "5 KB/s"])  // gauge draws the arrows
   #expect(MenuBar.parts(s, [:]).isEmpty)
   s.temperature = nil  // e.g. Intel: the metric drops out instead of showing a blank
