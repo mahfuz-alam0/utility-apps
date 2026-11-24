@@ -26,11 +26,11 @@ Each metric tints itself, in the menu bar and in the popup's numbers, blending a
 
 | Metric | Sky blue | Plain | Orange | Red |
 |---|---|---|---|---|
-| CPU temperature | 30 °C and below | 35–45 °C | 57.5 °C | 70 °C and above |
+| CPU temperature | 30 °C and below | 35–45 °C | 57–58 °C | 70 °C and above |
 | CPU load | – | up to 60 % | 80 % | 100 % |
 | Memory pressure | – | up to 50 % | 70 % | 90 % |
 
-Above 45 °C, temperature mixes in 4 % more of the next colour every 0.5 °C. Thresholds are the "Calibrate here" functions in [MenuBar.swift](../Sources/Vitals/MenuBar.swift). The popup's verdict icon and headline ignore them and follow macOS: thermal state and memory pressure level.
+Above 45 °C, temperature mixes in 8 % more of the next colour every 1 °C, in step with the number shown. Thresholds are the "Calibrate here" functions in [MenuBar.swift](../Sources/Vitals/MenuBar.swift). The popup's verdict icon and headline ignore them and follow macOS: thermal state and memory pressure level.
 
 ## Known limitations
 

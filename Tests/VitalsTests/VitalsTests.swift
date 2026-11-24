@@ -58,8 +58,9 @@ import Testing
   #expect(parts[0] == Part(lines: ["44°"], reserve: "88°", under: [Part.Bar(fill: 0.45)]))  // memory bar (47 % in 5 % steps) under the temperature
   #expect(parts[1].gauge == nil && parts[1].lines == ["↑ 0 KB/s", "↓ 5 KB/s"])
   #expect(MenuBar.parts(s, [.memory: .gauge]) == [Part(gauge: .bar(0.45))])  // no temperature: a bar of its own
-  #expect([20, 30, 32.5, 35, 45, 57.5, 70, 95].map(MenuBar.tempHeat) == [-0.5, -0.5, -0.25, 0, 0, 0.5, 1, 1])  // sky blue, plain, orange, red
-  #expect(MenuBar.tempHeat(45.5) == 0.02)  // 0.5 °C = 4 % of a colour
+  #expect([20, 30, 32, 35, 45, 57, 58, 70, 95].map(MenuBar.tempHeat) == [-0.5, -0.5, -0.3, 0, 0, 0.48, 0.52, 1, 1])  // sky blue, plain, orange, red
+  #expect(MenuBar.tempHeat(46) == 0.04)  // 1 °C = 8 % of a colour
+  #expect([45.4, 45.5, 46.4, 46.5].map(MenuBar.tempHeat) == [0, 0.04, 0.04, 0.08])  // one colour per shown number
   #expect(MenuBar.memoryHeat(47) == 0 && MenuBar.memoryHeat(70) == 0.5 && MenuBar.loadHeat(0.9) == 0.75)
   s.load = CPULoad(user: 0.6, system: 0.2)
   #expect(MenuBar.parts(s, [.temperature: .value, .load: .gauge, .memory: .gauge])
