@@ -50,29 +50,29 @@ import Testing
 
 @Test func menuBarFollowsDisplayModes() {
   var s = Sample()
-  s.temperature = 48.4
+  s.temperature = 44.4
   s.pressurePercent = 47
   s.network = NetRate(up: 0, down: 5000)
   let parts = MenuBar.parts(s, [.temperature: .value, .load: .off, .memory: .gauge, .network: .value])
   #expect(parts.count == 2)
-  #expect(parts[0] == Part(lines: ["48°"], reserve: "88°", under: [Part.Bar(fill: 0.45)]))  // memory bar (47 % in 5 % steps) under the temperature
+  #expect(parts[0] == Part(lines: ["44°"], reserve: "88°", under: [Part.Bar(fill: 0.45)]))  // memory bar (47 % in 5 % steps) under the temperature
   #expect(parts[1].gauge == nil && parts[1].lines == ["↑ 0 KB/s", "↓ 5 KB/s"])
   #expect(MenuBar.parts(s, [.memory: .gauge]) == [Part(gauge: .bar(0.45))])  // no temperature: a bar of its own
-  #expect([20, 40, 42.5, 45, 50, 60, 70, 95].map(MenuBar.tempHeat) == [-0.5, -0.5, -0.25, 0, 0, 0.5, 1, 1])  // sky blue, plain, orange, red
-  #expect(MenuBar.tempHeat(50.5) == 0.025)  // 0.5 °C = 5 % of a colour
+  #expect([20, 30, 32.5, 35, 45, 57.5, 70, 95].map(MenuBar.tempHeat) == [-0.5, -0.5, -0.25, 0, 0, 0.5, 1, 1])  // sky blue, plain, orange, red
+  #expect(MenuBar.tempHeat(45.5) == 0.02)  // 0.5 °C = 4 % of a colour
   #expect(MenuBar.memoryHeat(47) == 0 && MenuBar.memoryHeat(70) == 0.5 && MenuBar.loadHeat(0.9) == 0.75)
   s.load = CPULoad(user: 0.6, system: 0.2)
   #expect(MenuBar.parts(s, [.temperature: .value, .load: .gauge, .memory: .gauge])
-    == [Part(lines: ["48°"], reserve: "88°", under: [Part.Bar(fill: 0.8, heat: 0.5), Part.Bar(fill: 0.45)])])  // load bar on top
+    == [Part(lines: ["44°"], reserve: "88°", under: [Part.Bar(fill: 0.8, heat: 0.5), Part.Bar(fill: 0.45)])])  // load bar on top
   #expect(MenuBar.parts(s, [.network: .both])[0].lines == ["0 KB/s", "5 KB/s"])  // gauge draws the arrows
   #expect(MenuBar.parts(s, [:]).isEmpty)
   s.temperature = nil  // e.g. Intel: the metric drops out instead of showing a blank
   #expect(MenuBar.parts(s, [.temperature: .both]).isEmpty)
   #expect(MenuBar.image(parts).isTemplate)  // all normal: plain system look
   #expect(!MenuBar.image([Part(lines: ["85°"], heat: 0.65)]).isTemplate)
-  #expect(!MenuBar.image([Part(lines: ["38°"], heat: -0.5)]).isTemplate)  // cold is tinted too
+  #expect(!MenuBar.image([Part(lines: ["33°"], heat: -0.5)]).isTemplate)  // cold is tinted too
   #expect(!MenuBar.image([Part(lines: ["50°"], under: [Part.Bar(fill: 0.9, heat: 0.5)])]).isTemplate)
-  #expect(MenuBar.tempHeat(51) < 0.1 && MenuBar.tempHeat(55) < MenuBar.tempHeat(60))  // creeps in, no jump at one reading
+  #expect(MenuBar.tempHeat(46) < 0.1 && MenuBar.tempHeat(50) < MenuBar.tempHeat(55))  // creeps in, no jump at one reading
 }
 
 @Test func headlineNamesTheWorstProblem() {

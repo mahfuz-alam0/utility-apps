@@ -112,11 +112,11 @@ enum MenuBar {
 
   // MARK: drawing
 
-  /// Calibrate here. Sky blue up to 40 °C, fading to plain at 45; plain to 50; then orange at 60 and red from 70,
-  /// every 0.5 °C mixing in 5 % more of the next colour.
+  /// Calibrate here. Sky blue up to 30 °C, fading to plain at 35; plain to 45; then orange at 57.5 and red from 70,
+  /// every 0.5 °C mixing in 4 % more of the next colour.
   static func tempHeat(_ celsius: Double) -> Double {
     let t = (celsius * 2).rounded() / 2
-    return t < 50 ? min(max((t - 45) / 10, -0.5), 0) : min((t - 50) / 20, 1)
+    return t < 45 ? min(max((t - 35) / 10, -0.5), 0) : min((t - 45) / 25, 1)
   }
   /// Calibrate here. Plain until 60 % CPU load, orange at 80, red at 100.
   static func loadHeat(_ total: Double) -> Double { step((total - 0.6) / 0.4) }
